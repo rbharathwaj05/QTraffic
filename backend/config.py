@@ -63,7 +63,22 @@ class QTrafficConfig:
     theta_override: float = 0.30  # delta that bypasses cooldown entirely
 
     # --- cooldown (spec: re-plan controller) ---------------------------------------
-    T_cool: float = 120.0  # seconds of sim time between non-override re-plans
+    T_cool: float = 120.0  # seconds of SIM time between non-override re-plans [v4 47]
+    persistence_cycles: int = 2  # consecutive cycles above theta_soft to fire [v4 46]
+    epsilon_F: float = 1e-9  # floor in Delta = (F_after - F_before) / max(F_before, eps)
+    debounce_s: float = 2.0  # SIM seconds: events inside this window = one controller pass
+    local_scope_fraction: float = 0.5  # affected/total above this -> FLEET not LOCAL
+
+    # --- congestion (spec 7.2 / v4 3) ----------------------------------------------
+    # NOTE: distinct from `rho_max` above, which is the vehicle LOAD ratio. This one caps
+    # the road congestion level rho_ij(t) so V_ij = V_normal (1 - rho) never reaches 0.
+    rho_congestion_max: float = 0.95  # rho_ij(t) in [0, 0.95) [SPEC 7.2]
+    # Fleet-induced congestion is NOT in the core v3/v4 spec -- it is an enhancement from
+    # the architecture doc (doc2 9). Off by default; the core degradation math never reads
+    # it, so the ablation is a flag flip.
+    enable_fleet_congestion: bool = False
+    bpr_alpha: float = 0.15  # BPR a: t/t0 = 1 + a (q/c)^b (doc2 9, not core spec)
+    bpr_beta: float = 4.0  # BPR b
 
     # --- warm start (spec: warm start), must sum to 1 ------------------------------
     warm_fraction: float = 0.20  # particles seeded from incumbent solution
@@ -148,6 +163,10 @@ class QTrafficConfig:
             raise ValueError("require theta_soft <= theta_hard <= theta_override")
         if not 0 < self.rho_max <= 1:
             raise ValueError("require 0 < rho_max <= 1")
+        if not 0 < self.rho_congestion_max < 1:
+            raise ValueError("require 0 < rho_congestion_max < 1")
+        if self.T_cool < 0 or self.debounce_s < 0 or self.persistence_cycles < 1:
+            raise ValueError("require T_cool >= 0, debounce_s >= 0, persistence_cycles >= 1")
         if not 0 <= self.tw_anytime_fraction <= 1:
             raise ValueError("require 0 <= tw_anytime_fraction <= 1")
         if self.tw_width_range[1] > self.shift_end_s or self.tw_width_range[0] <= 0:

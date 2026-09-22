@@ -151,6 +151,48 @@ def update_factors(matrix: CostMatrix, edge_factor: np.ndarray, index: PathIndex
     return changed
 
 
+def update_factors_for_edges(
+    matrix: CostMatrix,
+    edge_factor: np.ndarray,
+    index: PathIndex,
+    edge_ids: Any,
+) -> np.ndarray:
+    """Scoped counterpart of `update_factors` [SPEC 10.2 / v4 43]: recompute `factor` ONLY
+    for the pairs that `PathIndex.invalidate_edge` says depend on the changed edges.
+
+    This is the path Phase 9 uses when a traffic event lands: an event touching k edges
+    touches |pairs_using(k)| pairs, typically a small slice of the N^2 matrix, so the full
+    `inflate_all` rebuild is skipped entirely. Same return contract as `update_factors`
+    (changed (i, j) as an int array, `traffic_version` bumped when anything moved).
+    """
+    if matrix.edge_t0 is None:
+        raise ValueError("CostMatrix.edge_t0 required for inflation")
+    pairs = set()
+    for e in edge_ids:
+        pairs |= index.invalidate_edge(int(e))
+    if not pairs:
+        return np.empty((0, 2), dtype=np.int64)
+
+    ij = np.array(sorted(pairs), dtype=np.int64)
+    lists = [index.edges_on(int(i), int(j)) for i, j in ij]
+    counts = np.array([len(x) for x in lists], dtype=np.int64)
+    flat = np.concatenate(lists) if len(lists) else np.empty(0, dtype=np.int64)
+    owner = np.repeat(np.arange(len(ij)), counts)
+    w = matrix.edge_t0[flat]
+    f = np.asarray(edge_factor, float)
+    num = np.bincount(owner, weights=w * f[flat], minlength=len(ij))
+    den = np.bincount(owner, weights=w, minlength=len(ij))
+    new = np.where(den > 0, num / np.where(den > 0, den, 1.0), 1.0)
+
+    old = matrix.factor[ij[:, 0], ij[:, 1]]
+    moved = ~np.isclose(new, old)
+    if not moved.any():
+        return np.empty((0, 2), dtype=np.int64)
+    matrix.factor[ij[moved, 0], ij[moved, 1]] = new[moved]
+    matrix.version.bump()
+    return ij[moved]
+
+
 def effective_duration(matrix: CostMatrix) -> np.ndarray:
     """c_ij = duration_s * factor, the matrix consumed by `optimization.fitness`
     (spec: fitness, travel-time term). Pure array op, zero OSRM / graph calls."""
