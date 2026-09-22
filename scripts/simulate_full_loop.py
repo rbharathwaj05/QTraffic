@@ -34,6 +34,7 @@ from backend.traffic.simulator import TrafficSimulator
 from scripts.simulate_event import load_road_layer
 
 COLUMNS = [
+    ("event", 6),
     ("t_sim", 7),
     ("delta", 8),
     ("scope", 6),
@@ -47,6 +48,9 @@ COLUMNS = [
     ("I_net", 8),
     ("S", 7),
     ("N_changes", 9),
+    ("RepairDistance", 15),
+    ("RepairIterations", 17),
+    ("gate", 6),
     ("feasible", 8),
     ("was_feasible", 12),
 ]
@@ -55,23 +59,43 @@ COLUMNS = [
 def event_script(n_edges: int, busiest: list[int], minutes: float) -> list[TrafficEvent]:
     """Three noisy events and two severe ones, spread over the run [SPEC 9.2 ladder].
 
-    The severities are chosen to land on either side of the hysteresis thresholds, so the
-    run exercises the ignore branch and the trigger branch rather than only one of them.
+    Severity alone does not decide Delta: an event on ONE edge of a path contributes only
+    its share of that path's weighted average, so a single-edge 0.95 event can still land
+    in the noise band. The severe events therefore hit the fleet's busiest `severe_edges`
+    at once -- which is also what a real incident looks like, a corridor rather than a
+    metre of tarmac -- so the run reliably exercises the trigger branch as well as the
+    ignore branch instead of depending on which initial plan the budgeted solve produced.
     """
     horizon = minutes * 60.0
-    picks = (busiest + [0, 1, 2, 3, 4])[:5]
-    plan = [(0.15, "noise"), (0.20, "noise"), (0.95, "severe"), (0.18, "noise"), (0.90, "severe")]
+    noise = (busiest[3:] + [0, 1, 2, 3, 4])[:3]
+    severe = np.array(busiest[:6] or [0], dtype=np.int64)
+    plan = [
+        (0.15, np.array([noise[0] % max(n_edges, 1)], dtype=np.int64)),
+        (0.20, np.array([noise[1] % max(n_edges, 1)], dtype=np.int64)),
+        (0.95, severe),
+        (0.18, np.array([noise[2] % max(n_edges, 1)], dtype=np.int64)),
+        (0.90, severe),
+    ]
     return [
         TrafficEvent(
             id=i,
             kind=EventKind.CONGESTION,
-            edge_ids=np.array([picks[i] % max(n_edges, 1)], dtype=np.int64),
+            edge_ids=edges,
             t_start=horizon * (i + 1) / (len(plan) + 1),
             duration_s=600.0,
             severity=sev,
         )
-        for i, (sev, _label) in enumerate(plan)
+        for i, (sev, edges) in enumerate(plan)
     ]
+
+
+def _gate_result(entry) -> str:
+    """What the switching gate said, as one word for the table [SPEC 9.3 point 4]."""
+    if entry.scope == "none":
+        return "-"
+    if not entry.swarm_in_budget:
+        return "late"  # the swarm missed its box, so the gate never saw it
+    return "pass" if entry.deployed is Fallback.SWARM else "hold"
 
 
 def main() -> None:
@@ -109,7 +133,7 @@ def main() -> None:
         for i, j in state.remaining_legs(v):
             for e in index.edges_on(i, j):
                 usage[int(e)] = usage.get(int(e), 0) + 1
-    busiest = sorted(usage, key=usage.get, reverse=True)[:5]
+    busiest = sorted(usage, key=usage.get, reverse=True)[:10]
 
     events = event_script(n_edges, busiest, a.minutes)
     sim = TrafficSimulator(n_edges, np.zeros(n_edges), np.ones(n_edges), events, index, matrix, cfg)
@@ -148,6 +172,8 @@ def main() -> None:
         after = TrafficState.from_cost_matrix(matrix)
         entry = loop.on_event(t, batch, before, after)
         row = entry.as_row()
+        row["event"] = len(loop.log)
+        row["gate"] = _gate_result(entry)
         print("".join(str(row[name]).rjust(w) for name, w in COLUMNS))
 
     s = loop.summary()

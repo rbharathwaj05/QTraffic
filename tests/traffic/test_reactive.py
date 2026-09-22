@@ -1,5 +1,7 @@
 """Phase 10: the reactive loop end to end [SPEC 9.1-9.5, v4 20-21 / 50-58]."""
 
+import time
+
 import numpy as np
 import pytest
 
@@ -362,3 +364,61 @@ def test_the_ladder_picks_its_level_by_the_budget_already_spent():
 
     _, level = loop.fast_fallback([0], [1000], b_available=10.0, spent=9.95)
     assert level is Fallback.NONE  # past fallback_l2_fraction: keep the current route
+
+
+# -- Phase 10 acceptance: the swarm is handed B_available, not an iteration count ----------
+def test_the_reactive_call_receives_a_wall_clock_box_not_an_iteration_count(monkeypatch):
+    """[v4 57] B_available = budget - T_detection - T_deployment, passed as time_budget_s."""
+    cfg, rng, state, prob, ctx, traffic = s2_world()
+    seen = {}
+    real = mod.ebqpso.reoptimize_local
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        seen["positional"] = args
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(mod.ebqpso, "reoptimize_local", spy)
+    loop = make_loop(cfg, state, prob, ctx, index_for(state, victim=0), rng)
+    entry = loop.on_event(500.0, [1000], traffic, worsen(traffic, 3.0))
+
+    assert "time_budget_s" in seen  # a wall-clock box...
+    assert "T" not in seen and "iterations" not in seen  # ...and never an iteration cap
+    assert 0.0 < seen["time_budget_s"] <= entry.b_available
+    budget = cfg.T_response_fleet if entry.scope == "fleet" else cfg.T_response_local
+    assert entry.b_available == pytest.approx(budget - entry.t_detection - cfg.T_deployment_target)
+
+
+def test_a_swarm_result_that_misses_the_box_cannot_replace_the_fallback(monkeypatch):
+    """[SPEC 9.5] "The optimizer's result replaces the fallback only when it arrives in
+    budget." Simulated by shrinking the box to zero after detection."""
+    cfg, rng, state, prob, ctx, traffic = s2_world()
+    loop = make_loop(cfg, state, prob, ctx, index_for(state, victim=0), rng)
+
+    real = mod.ebqpso.reoptimize_local
+
+    def slow(*args, **kwargs):
+        out = real(*args, **kwargs)
+        time.sleep(0.05)  # push the elapsed time past the (tiny) box
+        return out
+
+    monkeypatch.setattr(mod.ebqpso, "reoptimize_local", slow)
+    monkeypatch.setattr(cfg, "T_response_local", 0.001)
+    monkeypatch.setattr(cfg, "T_response_fleet", 0.001)
+    monkeypatch.setattr(cfg, "T_deployment_target", 0.0)
+    entry = loop.on_event(500.0, [1000], traffic, worsen(traffic, 3.0))
+    assert entry.swarm_in_budget is False
+    assert entry.deployed is not Fallback.SWARM  # the fallback stands
+
+
+def test_the_gate_and_the_no_worse_guard_both_stand_between_swarm_and_deployment():
+    """A swarm plan is deployed only if it is in budget AND clears the gate AND does not
+    add violations -- three independent conditions, asserted on the live code path."""
+    import inspect
+
+    src = inspect.getsource(mod.ReactiveLoop.on_event)
+    assert "if entry.swarm_in_budget:" in src
+    assert "if check.deploy and self._is_improvement(routes):" in src
+    assert src.index("self.fast_fallback") < src.index("reoptimize_local")  # fallback first
+    assert src.index("reoptimize_local") < src.index("assess_switch")  # then gate
+    assert src.index("assess_switch") < src.index("self.controller.record")  # then cooldown
