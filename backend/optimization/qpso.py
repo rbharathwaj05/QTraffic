@@ -316,10 +316,19 @@ class QPSO:
         return {}
 
     # -- 7.7 main loop -----------------------------------------------------------------
-    def run(self, T: int | None = None, time_budget_s: float | None = None) -> SwarmResult:
+    def run(
+        self,
+        T: int | None = None,
+        time_budget_s: float | None = None,
+        seed_particles: np.ndarray | None = None,
+    ) -> SwarmResult:
         """Iterate until the iteration cap T (default `cfg.T_iter_max`), the wall-clock
         budget, or stagnation that survives a diversity injection (never before
         `cfg.T_iter_min`) [SPEC 11 steps 5-28, plain-QPSO subset].
+
+        `seed_particles` is the Phase 10 warm start [v4 53-54]: rows handed to
+        `initialize`, the rest of the swarm cold. The uniform `run(T, time_budget_s)`
+        signature every algorithm shares is unchanged -- `benchmark.py` never passes it.
 
         The loop stops early when the next iteration would not fit in the remaining
         budget. The post-loop work (final 2-opt polish + `check_all` on the reported
@@ -336,7 +345,7 @@ class QPSO:
         budget = np.inf if time_budget_s is None else float(time_budget_s)
         t0 = time.perf_counter()
 
-        batch = self.initialize()
+        batch = self.initialize(seed_particles)  # Phase 10 warm start [v4 53]
         self._absorb(batch)
         s = self.state
         history, wallclock = [s.gbest_F], [time.perf_counter() - t0]
