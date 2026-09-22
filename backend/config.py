@@ -25,8 +25,23 @@ class QTrafficConfig:
     two_opt_max_passes: int = 4  # bound on the gbest-route polish [SPEC 7.5]
 
     # --- elite breeding (spec: EB-QPSO) --------------------------------------------
-    r_E: float = 0.15  # elite fraction, spec range [0.10, 0.20]
-    r_B: float = 0.08  # breeding fraction, spec range [0.05, 0.10]
+    r_E: float = 0.15  # elite fraction, spec range [0.10, 0.20]           [v4 29]
+    r_B: float = 0.08  # breeding fraction, spec range [0.05, 0.10]        [v4 32]
+    # Breeding noise sigma [v4 31]. The spec gives the FORM of the term (sigma * eps,
+    # eps ~ N(0, I)) but NO numeric default, so these are experimental knobs to be tuned
+    # and ablated [v4 71]; 0.05 is a deliberately conservative starting point (a child
+    # lands within ~0.1 of the parent blend in key space, i.e. usually the same permutation
+    # with a few swapped ranks).
+    sigma_A: float = 0.05  # breeding noise on the assignment block Y      [v4 31]
+    sigma_O: float = 0.05  # breeding noise on the ordering block Z        [v4 31]
+    # Block-aware alpha [v4 28]: the two key blocks may contract on separate schedules.
+    # ON by default per v4; the Phase 13 ablation turns it off to separate its effect from
+    # breeding itself. The spec gives no numbers for the per-block endpoints, so both
+    # default to the shared alpha_max/alpha_min -- enabled-with-defaults is numerically
+    # identical to disabled until these are retuned.
+    block_alpha: bool = True  # per-block contraction-expansion schedules  [v4 28]
+    alpha_max_order: float = 1.0  # alpha_O at t=0, Z-block                [v4 28]
+    alpha_min_order: float = 0.4  # alpha_O at t=T_proj, Z-block           [v4 28]
 
     # --- objective weights (spec: fitness function), must sum to 1 -----------------
     w_t: float = 0.40  # total travel time
@@ -116,10 +131,19 @@ class QTrafficConfig:
                 raise ValueError(f"{name} must sum to 1, got {total}")
         for name, (lo, hi) in self._ranges.items():
             v = getattr(self, name)
+            # r_B == 0 is the documented off-switch for the Phase 13 breeding ablation
+            # ("EB-QPSO with breeding disabled must equal plain QPSO"); any other value
+            # must sit inside the spec range [v4 32].
+            if name == "r_B" and v == 0.0:
+                continue
             if not lo <= v <= hi:
                 raise ValueError(f"{name}={v} outside spec range [{lo}, {hi}]")
         if not 0 < self.alpha_min <= self.alpha_max:
             raise ValueError("require 0 < alpha_min <= alpha_max")
+        if not 0 < self.alpha_min_order <= self.alpha_max_order:
+            raise ValueError("require 0 < alpha_min_order <= alpha_max_order")
+        if self.sigma_A < 0 or self.sigma_O < 0:
+            raise ValueError("require sigma_A >= 0 and sigma_O >= 0")
         if not self.theta_soft <= self.theta_hard <= self.theta_override:
             raise ValueError("require theta_soft <= theta_hard <= theta_override")
         if not 0 < self.rho_max <= 1:

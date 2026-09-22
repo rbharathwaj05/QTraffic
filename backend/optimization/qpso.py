@@ -301,6 +301,17 @@ class QPSO:
             self._best_fleet = batch.fleets[g]
             self._best_capped = bool(batch.capped_out[g])
 
+    # -- extension hooks (Phase 8) ------------------------------------------------------
+    def post_absorb(self, t: int, batch: EvalBatch) -> None:
+        """Called once per iteration after pbest/gbest are updated and before the history
+        entry is recorded. No-op in plain QPSO; EB-QPSO hangs steps 7-13 of its iteration
+        (mbest, elites, breeding, replacement) here so it composes this loop instead of
+        re-implementing it [v4 36]."""
+
+    def extra_diagnostics(self) -> dict[str, float]:
+        """Per-algorithm additions to `SwarmResult.diagnostics`. Empty for plain QPSO."""
+        return {}
+
     # -- 7.7 main loop -----------------------------------------------------------------
     def run(self, T: int | None = None, time_budget_s: float | None = None) -> SwarmResult:
         """Iterate until the iteration cap T (default `cfg.T_iter_max`), the wall-clock
@@ -344,6 +355,7 @@ class QPSO:
             self.update_positions(s.alpha)
             batch = self.evaluate(s.X)
             self._absorb(batch)
+            self.post_absorb(t, batch)  # EB-QPSO breeds + replaces here [v4 36 steps 7-13]
             history.append(s.gbest_F)
             wallclock.append(time.perf_counter() - t0)
 
@@ -380,11 +392,14 @@ class QPSO:
             residual=report.total,
             diagnostics={
                 "injections": float(injections),
-                "alpha_final": s.alpha,
+                # mean, because EB-QPSO's block-aware alpha [v4 28] makes this a per-block
+                # vector; for plain QPSO the mean of a scalar is that scalar.
+                "alpha_final": float(np.mean(s.alpha)),
                 "T_projected": s.T_proj,
                 "diversity_final": self.diversity(),
                 "repair_failure_rate": float(batch.capped_out.mean()),
                 "repair_distance_mean": float(batch.repair_distance.mean()),
                 "repair_iterations_mean": float(batch.repair_iterations.mean()),
+                **self.extra_diagnostics(),
             },
         )
