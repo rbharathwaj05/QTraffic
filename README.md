@@ -4,10 +4,11 @@ Dynamic fleet-routing platform: QPSO / EB-QPSO optimisation of a capacitated veh
 routing problem with time windows (CVRPTW) over a live OpenStreetMap road graph, with
 simulated traffic events driving incremental re-planning.
 
-Phases 0–5 are implemented (road graph, cost matrices, fleet data model, random-key
-encoding, canonical fitness). Constraints, optimisers, traffic simulation, API and
-frontend are scaffolded and still raise `NotImplementedError`. `CLAUDE.md` holds the
-standing invariants; this file describes what exists and how it fits together.
+Phases 0–6 are implemented (road graph, cost matrices, fleet data model, random-key
+encoding, canonical fitness, constraint checker + repair). Optimisers, traffic
+simulation, API and frontend are scaffolded and still raise `NotImplementedError`.
+`CLAUDE.md` holds the standing invariants; this file describes what exists and how it
+fits together. Every module carries inline comments explaining the non-obvious steps.
 
 ---
 
@@ -16,7 +17,7 @@ standing invariants; this file describes what exists and how it fits together.
 | Layer | Technology | Used for |
 |---|---|---|
 | Language | Python 3.11+ | whole backend |
-| Numerics | NumPy (Numba planned for kernels) | vectorised decode / fitness over the whole swarm |
+| Numerics | NumPy + Numba | vectorised decode / fitness over the whole swarm; `@njit` for the sequential arrival-time and insertion-scan kernels |
 | Road graph | osmnx + networkx | OSM download, simplification, largest-SCC pruning, GraphML cache, KD-tree snapping |
 | Routing engine | OSRM (`osrm/osrm-backend`, MLD) | one-time `/table` (OD durations, distances) and `/route` (path node annotations) |
 | Shared state | Redis 7 | monotone `traffic_version` per scenario (in-process fallback when no client) |
@@ -36,7 +37,7 @@ backend/
   road/                Phase 1-2: graph, OSRM, cost matrices, path index, scenario precompute
   fleet/               Phase 3: Customer / Vehicle schema, scenario generator
   optimization/        Phase 4-5: encoding, fitness; qpso/ebqpso/pso/ga/aco/benchmark stubs
-  constraints/         Phase 6 (stub): feasibility, checker, repair
+  constraints/         Phase 6: feasibility predicates, fixed-order checker, bounded repair
   traffic/             Phase 7 (stub): events, congestion, simulator, controller
   simulation/          stub: clock, engine, replay
   api/                 stub: fleet, traffic, optimization, websocket
@@ -78,7 +79,15 @@ tests/                 mirrors backend/, one test_<module>.py per module
  optimization/encoding  ---->  optimization/fitness.evaluate  ---->  F per particle
    X (M, 2N) random keys          T, D, C gathers + R' vs deployed plan
    decode_dense -> (a, order, ptr)     normalised by frozen Bounds
+     |                                        ^
+     v  decode -> FleetRoute                  |  penalties = residual P
+ constraints/checker.check_all  --->  constraints/repair.repair  --> repaired FleetRoute
+   6 checks, fixed order, magnitudes    <= MAX_REPAIR_ITERATIONS moves, d_R, capped_out
+   (feasibility.py: Numba arrivals / insertion scans shared by both)
 ```
+
+`repair` never sees `X`; it consumes the decoded `FleetRoute` and hands back a repaired
+one plus the residual `P` that `fitness.evaluate` adds as `w_p · P`.
 
 ### 3.2 Road layer (`backend/road/`)
 
@@ -164,7 +173,43 @@ F_eval = F + w_p·P                                P = residual violation after 
 * `evaluate(plans, traffic, current, bounds, cfg, penalties=None) → (M,)` accepts the
   dense tuple (preferred) or a `list[FleetRoute]`.
 
-### 3.6 Configuration
+### 3.6 Constraints (`backend/constraints/`)
+
+Index convention matches the encoding: matrix index 0 = depot, customers 1..N; every
+per-node array is `(N+1,)` so `arr[route]` works directly.
+
+* **`feasibility`** — `Problem` (frozen per-scenario data: `duration`, `demand`,
+  `service`, `windows`, `capacity`, `shift_end`, `t_start`, `rho_max`;
+  `Problem.from_scenario(customers, vehicles, duration, rho_max)` builds it from the
+  Phase 3 entities). Predicates: `load_ratio` / `is_capacity_feasible`,
+  `arrival_times` (`A_k = max(e_k, A_{k-1} + s_{k-1} + c_{k-1,k})`, Numba),
+  `lateness`, `is_time_feasible`, `route_end`, `fleet_arrivals` (all routes in one
+  jitted pass over a CSR view), `insertion_scan` (lateness + detour cost for every
+  slot of a route, availability folded in, `inf` for unroutable legs) and `can_insert`.
+* **`checker`** — six checks in **fixed order** (`capacity, coverage, time_window,
+  availability, depot, connectivity`), each returning structured `Violation(kind,
+  vehicle, customers, magnitude)`. Magnitudes are dimensionless (`excess / limit`,
+  `lateness / H_v`, `1` per missing visit or broken leg) so `ViolationReport.total` is
+  the residual `P`. `check_all(fleet, prob)` runs them all; `report.first` is what
+  repair acts on.
+* **`repair`** — `repair(decoded, prob, cfg, strategy="minimal") -> RepairResult`.
+  Bounded cascade: check → fix the first violation → re-check, at most
+  `MAX_REPAIR_ITERATIONS` (8) moves, then accept as-is with `capped_out=True`. No
+  `while` loop exists in the module. Move table: overload → eject the stop whose
+  removal restores feasibility with the fewest shifted stops; missing → insert at the
+  feasible slot closest to the decoded `(vehicle, pos)`; duplicate → drop the copy
+  farther from decoded; time window → smallest in-route reorder, else eject first late
+  stop; availability → eject last stop; depot → rewrap `[0, stops, 0]`; connectivity →
+  relocate the far end of the `inf` leg. Every ejected stop is reinserted by
+  `_best_slot`, ranked feasible < capacity-ok-but-late < over-capacity, then by
+  perturbation distance, then insertion cost. `RepairResult` carries `distance`
+  (`d_R = η_a·d_A + η_o·d_O`), `iterations`, `moves`, `distances`, `residual`.
+  Ablation strategies `"cheapest"` and `"smallest_demand"` share the interface.
+* **Non-write-back invariant (spec §8.3):** `repair` has no `X` / particle / swarm
+  parameter; `test_repair.py` asserts this on the signature and that the input
+  `FleetRoute` is never mutated.
+
+### 3.7 Configuration
 
 `QTrafficConfig` in `backend/config.py` is the only home for tunables: swarm size and
 iteration budget, elite/breeding fractions, objective weights (`w_t + w_d + w_c + w_r
@@ -204,10 +249,20 @@ python -m backend.road.build_scenario --id S2 --n 50   # OSRM matrices + path in
 ### 4.4 Per-scenario setup (what an optimiser will do)
 
 1. `matrix, index, points = road.build_scenario.load_scenario(id)`
-2. `traffic = fitness.TrafficState.from_cost_matrix(matrix)`
-3. `bounds = fitness.compute_normalization_bounds(traffic, N, M_veh, rng)` — once
-4. Loop: `plans = encoding.decode_dense(X, M_veh)`;
-   `F = fitness.evaluate(plans, traffic, current_plan, bounds, cfg)`
+2. `customers, vehicles, depot = fleet.scenario.load(id)`
+3. `traffic = fitness.TrafficState.from_cost_matrix(matrix)`
+4. `prob = feasibility.Problem.from_scenario(customers, vehicles, traffic.duration, cfg.rho_max)`
+5. `bounds = fitness.compute_normalization_bounds(traffic, N, M_veh, rng)` — once
+6. Loop:
+   ```python
+   fleets = encoding.decode(X, M_veh)                       # pure, X untouched
+   results = [repair.repair(f, prob, cfg) for f in fleets]  # per-particle repair
+   plans = fitness.to_dense([r.fleet for r in results])
+   P = np.array([r.residual for r in results])
+   F = fitness.evaluate(plans, traffic, current_plan, bounds, cfg, penalties=P)
+   ```
+   `F` is used to update pbest/gbest; the repaired routes are what gets deployed. `X`,
+   pbest, gbest, mbest stay raw keys.
 
 ### 4.5 Live traffic update path
 
@@ -237,8 +292,9 @@ edge_factor, index)` rewrites `factor` and bumps `TrafficVersion` →
 | 3 | Customer/Vehicle schema, scenario generator S1–S5 | done |
 | 4 | random-key encode/decode, vectorised over the swarm | done |
 | 5 | canonical normalised fitness `evaluate()` | done |
-| 6 | feasibility, violation checker, repair | stub |
+| 6 | feasibility predicates, fixed-order checker, bounded minimal-perturbation repair | done |
 | 7+ | QPSO / EB-QPSO / baselines, traffic simulation, controller, API, frontend | stub |
 
-Test suite at Phase 5: `50 passed, 22 skipped` (skips are Phase 0 stub tests, kept
-until their bodies land).
+Test suite at Phase 6: `72 passed, 19 skipped` (skips are Phase 0 stub tests, kept
+until their bodies land). Tests that need an OSM download skip automatically when
+offline.

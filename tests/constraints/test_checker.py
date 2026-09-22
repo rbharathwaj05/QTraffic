@@ -1,3 +1,7 @@
+"""Phase 6: one fleet breaking all six constraints yields violations in SPEC 8.4 order
+with the expected vehicle / customers / dimensionless magnitude; each check in
+isolation; magnitudes add up to the residual P."""
+
 import numpy as np
 
 from backend.constraints import checker as mod

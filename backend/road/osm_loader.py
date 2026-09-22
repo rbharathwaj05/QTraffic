@@ -38,6 +38,7 @@ FALLBACK_KPH = 25.0
 
 
 def _slug(text: str) -> str:
+    # "Chennai, India" -> "chennai-india": filesystem-safe cache key from a place query.
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
@@ -58,17 +59,23 @@ def load_city_graph(
     """
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
+    # Cache file name encodes the query (bbox coords or slugified place) + network type,
+    # so different cities / bboxes never collide in the same cache directory.
     key = f"bbox-{'_'.join(f'{v:.5f}' for v in bbox)}" if bbox else _slug(place)
     path = cache_dir / f"{key}-{network_type}.graphml"
     if path.exists():
+        # Cache hit: the saved graph was already cleaned and annotated, so return as-is.
         log.info("road graph cache hit: %s", path)
         return ox.load_graphml(path)
 
+    # Cache miss: download from Overpass via osmnx (slow, network-bound).
     if bbox:
         graph = ox.graph_from_bbox(bbox, network_type=network_type)
     else:
         graph = ox.graph_from_place(place, network_type=network_type)
     n0, e0 = graph.number_of_nodes(), graph.number_of_edges()
+    # Keep only the largest strongly connected component: guarantees every node can reach
+    # every other node, so no OD pair is ever unroutable downstream.
     graph = ox.truncate.largest_component(graph, strongly=True)
     log.info(
         "largest SCC kept: dropped %d nodes, %d edges (%d nodes, %d edges remain)",
@@ -77,9 +84,11 @@ def load_city_graph(
         graph.number_of_nodes(),
         graph.number_of_edges(),
     )
+    # Annotate edges: speed_kph from maxspeed tag (else highway-type table), then
+    # travel_time = length / speed. Both are required by later phases (edge_t0 weights).
     graph = ox.add_edge_speeds(graph, hwy_speeds=HWY_SPEEDS_KPH, fallback=FALLBACK_KPH)
     graph = ox.add_edge_travel_times(graph)
-    ox.save_graphml(graph, path)
+    ox.save_graphml(graph, path)  # persist so the next run is a cache hit
     return graph
 
 
@@ -94,13 +103,15 @@ def snap_points_to_nodes(graph: nx.MultiDiGraph, points: list[tuple[float, float
     if not points:
         return []
     pts = np.asarray(points, dtype=float)
+    # osmnx expects X=lon, Y=lat; one call builds a KD-tree and answers all queries at once.
     ids = ox.distance.nearest_nodes(graph, X=pts[:, 1], Y=pts[:, 0])
-    return [int(i) for i in np.atleast_1d(ids)]
+    return [int(i) for i in np.atleast_1d(ids)]  # atleast_1d: single point returns scalar
 
 
 def pick_depot_node(graph: nx.MultiDiGraph, near: tuple[float, float] | None = None) -> int:
     """Depot node: nearest to `near`, else nearest to the graph's node centroid."""
     if near is None:
+        # No preference given: use the centroid of all node coordinates as the target.
         lat, lon = graph_to_arrays(graph)[:2]
         near = (float(lat.mean()), float(lon.mean()))
     return snap_points_to_nodes(graph, [near])[0]
@@ -109,7 +120,9 @@ def pick_depot_node(graph: nx.MultiDiGraph, near: tuple[float, float] | None = N
 def graph_to_geojson(graph: nx.MultiDiGraph) -> dict:
     """Road edges as a GeoJSON FeatureCollection of LineStrings, properties {u, v, key}
     only (spec: frontend map layer). Live per-edge speeds are a separate layer."""
+    # fill_edge_geometry: straight u->v line for edges osmnx stored without geometry.
     edges = ox.graph_to_gdfs(graph, nodes=False, fill_edge_geometry=True)
+    # reset_index moves (u, v, key) into columns so they appear as feature properties.
     return edges[["geometry"]].reset_index().__geo_interface__
 
 
@@ -119,9 +132,11 @@ def graph_to_arrays(graph: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.
 
     Node index = position in `graph.nodes` order; the mapping is stable for the session.
     """
+    # OSM node ids are large sparse integers; remap to dense 0..n-1 positions.
     index = {n: i for i, n in enumerate(graph.nodes)}
     lat = np.fromiter((d["y"] for _, d in graph.nodes(data=True)), float, len(index))
     lon = np.fromiter((d["x"] for _, d in graph.nodes(data=True)), float, len(index))
+    # Edge order here == graph.edges() order == `path_index.osm_edge_index` edge ids.
     uv = np.array([(index[u], index[v]) for u, v in graph.edges()], dtype=np.int32).reshape(-1, 2)
     length = np.array([d["length"] for _, _, d in graph.edges(data=True)], dtype=np.float64)
     return lat, lon, uv, length
@@ -129,4 +144,5 @@ def graph_to_arrays(graph: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.
 
 def free_flow_travel_time(edge_length: np.ndarray, speed_kph: np.ndarray) -> np.ndarray:
     """Per-edge free-flow time in seconds: t0 = length / (speed_kph / 3.6) (spec: road model)."""
+    # km/h -> m/s is division by 3.6; metres / (m/s) = seconds. Vectorised over all edges.
     return np.asarray(edge_length, float) / (np.asarray(speed_kph, float) / 3.6)

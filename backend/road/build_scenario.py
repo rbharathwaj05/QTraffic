@@ -34,21 +34,24 @@ def build_scenario(
 ) -> tuple[CostMatrix, PathIndex, list[tuple[float, float]]]:
     """Depot (index 0) + `n_customers` random graph nodes -> matrices + path index,
     persisted under `out_dir/scenario_id`. Returns (matrix, index, points)."""
-    t = time.perf_counter()
+    t = time.perf_counter()  # wall-clock for logging only, never part of any objective
     graph = load_road_graph(config)
     depot = pick_depot_node(graph, config.depot_latlon)
+    # Sample customer nodes without replacement, excluding the depot; depot is index 0.
     pool = [n for n in graph.nodes if n != depot]
     nodes = [depot] + [int(x) for x in rng.choice(pool, n_customers, replace=False)]
-    points = [(graph.nodes[n]["y"], graph.nodes[n]["x"]) for n in nodes]
+    points = [(graph.nodes[n]["y"], graph.nodes[n]["x"]) for n in nodes]  # (lat, lon)
+    # Per-edge free-flow time in graph edge order: the weights for path-level inflation.
     edge_t0 = np.array([d["travel_time"] for _, _, d in graph.edges(data=True)], float)
 
     client = OSRMClient(config.osrm_url)
     matrix = build_cost_matrix(points, client, edge_t0, TrafficVersion(scenario_id))
     t_table = time.perf_counter() - t
     index = PathIndex()
-    index.build(points, client, osm_edge_index(graph))
+    index.build(points, client, osm_edge_index(graph))  # N*(N-1) /route calls
     t_total = time.perf_counter() - t
 
+    # Persist the three artifacts `load_scenario` reads back later.
     d = Path(out_dir) / scenario_id
     d.mkdir(parents=True, exist_ok=True)
     matrix.save(d / "matrices.npz")

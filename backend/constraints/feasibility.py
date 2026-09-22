@@ -37,7 +37,7 @@ class Problem:
     def from_scenario(cls, customers, vehicles, duration: np.ndarray, rho_max: float) -> Problem:
         """Build from `fleet.customer.Customer` / `fleet.vehicle.Vehicle` lists (depot
         prepended at index 0, matching the cost matrix layout)."""
-        z = np.zeros(1)
+        z = np.zeros(1)  # depot row prepended to every per-node array
         return cls(
             duration=np.asarray(duration, float),
             demand=np.concatenate([z, [c.demand for c in customers]]),
@@ -47,7 +47,7 @@ class Problem:
             ),
             capacity=np.array([v.capacity for v in vehicles], float),
             shift_end=np.array([v.shift_end for v in vehicles], float),
-            t_start=np.zeros(len(vehicles)),
+            t_start=np.zeros(len(vehicles)),  # all vehicles leave the depot at t = 0
             rho_max=rho_max,
         )
 
@@ -66,13 +66,15 @@ def is_capacity_feasible(
 
 
 # -- time --------------------------------------------------------------------------
-@njit(cache=True)
+@njit(cache=True)  # cache=True: compiled machine code persists across processes
 def _arrivals(route, duration, service, tw_start, t_start):
     # [SPEC 7.3] A_k = max(e_k, A_{k-1} + s_{k-1} + c_{k-1,k}); waiting allowed when early
+    # Inherently sequential (each A_k depends on A_{k-1}), hence a jitted loop, not NumPy.
     A = np.empty(len(route))
     A[0] = t_start
     for k in range(1, len(route)):
         i, j = route[k - 1], route[k]
+        # leave i after service, travel i->j, wait if arriving before j's window opens
         A[k] = max(A[k - 1] + service[i] + duration[i, j], tw_start[j])
     return A
 
@@ -99,6 +101,7 @@ def lateness(
     """Per-stop max(0, A_k - l_k), 0 at the depot ends [SPEC 7.3 time-window violation].
     Non-finite arrivals (unroutable leg upstream) count 0 here: connectivity owns them."""
     A = arrival_times(route, duration, service, windows, t_start)
+    # inf arrival -> treated as 0 here so it does not register as infinite lateness.
     return np.maximum(0.0, np.where(np.isfinite(A), A, 0.0) - windows[route, 1])
 
 
@@ -138,6 +141,7 @@ def _fleet_arrivals(flat, ptr, duration, service, tw_start, t_start):
 
 def flatten(routes: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
     """(flat, ptr) CSR view of a route list, depot ends included."""
+    # Same CSR idea as path_index.csr(): ptr[v]:ptr[v+1] slices route v out of `flat`.
     ptr = np.zeros(len(routes) + 1, np.int64)
     np.cumsum([len(r) for r in routes], out=ptr[1:])
     return np.concatenate(routes).astype(np.int64), ptr
@@ -161,19 +165,20 @@ def _insert_scan(route, cust, duration, service, tw_start, tw_end, t_start, shif
     L = len(route)
     late = np.empty(L - 1)
     cost = np.empty(L - 1)
-    new = np.empty(L + 1, np.int64)
-    for p in range(1, L):
+    new = np.empty(L + 1, np.int64)  # scratch buffer for the candidate route, reused
+    for p in range(1, L):  # try every interior slot
+        # Build route-with-cust-at-p without allocating: copy prefix, cust, suffix.
         new[:p] = route[:p]
         new[p] = cust
         new[p + 1 :] = route[p:]
         A = _arrivals(new, duration, service, tw_start, t_start)
         tot = 0.0
-        for k in range(1, L):
+        for k in range(1, L):  # sum lateness over all customer stops of the new route
             tot += max(0.0, A[k] - tw_end[new[k]])
         tot += max(0.0, A[L] - shift_end)  # availability folded in as depot lateness
-        late[p - 1] = tot if np.isfinite(A[L]) else np.inf
+        late[p - 1] = tot if np.isfinite(A[L]) else np.inf  # inf: some leg is unroutable
         a, b = route[p - 1], route[p]
-        cost[p - 1] = duration[a, cust] + duration[cust, b] - duration[a, b]
+        cost[p - 1] = duration[a, cust] + duration[cust, b] - duration[a, b]  # detour cost
     return late, cost
 
 
@@ -192,6 +197,7 @@ def insertion_scan(
         float(prob.t_start[v]),
         float(prob.shift_end[v]),
     )
+    # Capacity does not depend on where in the route the customer goes: one scalar.
     cap_ok = (prob.demand[route].sum() + prob.demand[cust]) <= prob.rho_max * prob.capacity[v]
     return late, cost, bool(cap_ok)
 
@@ -200,4 +206,4 @@ def can_insert(route: np.ndarray, pos: int, cust: int, prob: Problem, v: int) ->
     """Capacity + time-window + availability feasibility of inserting `cust` before
     `route[pos]` on vehicle `v` [SPEC 8.2 feasible insertion test]."""
     late, _, cap_ok = insertion_scan(route, cust, prob, v)
-    return cap_ok and late[pos - 1] == 0.0
+    return cap_ok and late[pos - 1] == 0.0  # slot p is stored at index p - 1

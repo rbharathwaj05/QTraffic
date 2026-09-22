@@ -1,3 +1,6 @@
+"""Phase 2: /table tiling (9 calls for 6 points at max_table_size=4, nan on null) and
+/route parsing, both with `_get` monkeypatched so no HTTP happens."""
+
 import numpy as np
 
 from backend.road.osrm_client import OSRMClient

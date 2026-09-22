@@ -31,23 +31,25 @@ class TrafficVersion:
 
     def __init__(self, scenario_id: str, redis: Any | None = None) -> None:
         self.scenario_id = scenario_id
-        self._redis = redis
-        self._local = 0
+        self._redis = redis  # duck-typed: needs .get(key) and .incr(key) only
+        self._local = 0  # in-process counter used when no Redis client is given
         self._key = f"qtraffic:{scenario_id}:traffic_version"
 
     @property
     def value(self) -> int:
         if self._redis is None:
             return self._local
-        return int(self._redis.get(self._key) or 0)
+        return int(self._redis.get(self._key) or 0)  # missing key -> version 0
 
     def bump(self) -> int:
+        """Increment and return the new version (atomic INCR when backed by Redis)."""
         if self._redis is None:
             self._local += 1
             return self._local
         return int(self._redis.incr(self._key))
 
     def cache_key(self, i: int, j: int) -> tuple[str, int, int, int]:
+        # Any cache keyed by this tuple is automatically stale after a bump.
         return (self.scenario_id, self.value, i, j)
 
 
@@ -61,11 +63,13 @@ class CostMatrix:
 
     # -- persistence: data/scenarios/<id>/matrices.npz ------------------------------
     def save(self, path: Path) -> None:
+        # Only the frozen parts are persisted; `factor` is live state and is reset to
+        # ones on load (a fresh process starts at free flow).
         np.savez_compressed(
             path,
             duration_s=self.duration_s,
             distance_m=self.distance_m,
-            edge_t0=np.empty(0) if self.edge_t0 is None else self.edge_t0,
+            edge_t0=np.empty(0) if self.edge_t0 is None else self.edge_t0,  # npz needs an array
         )
 
     @classmethod
@@ -76,7 +80,7 @@ class CostMatrix:
             duration_s=z["duration_s"],
             distance_m=z["distance_m"],
             factor=np.ones_like(z["duration_s"]),
-            edge_t0=None if t0.size == 0 else t0,
+            edge_t0=None if t0.size == 0 else t0,  # empty sentinel -> None
             version=version or TrafficVersion("default"),
         )
 
@@ -87,7 +91,9 @@ def build_cost_matrices(
     """(D, T_base), each (N+1, N+1) with depot at index 0, from OSRM /table
     [SPEC 10.2]. Computed ONCE per scenario; raises if any pair is unroutable so no
     NaN ever reaches the optimiser."""
-    dur, dist = client.table(points)
+    dur, dist = client.table(points)  # the one and only /table call for this scenario
+    # OSRM returns null (-> nan) for pairs it cannot route; fail loudly here rather than
+    # let a nan poison every fitness value later.
     bad = ~np.isfinite(dur) | ~np.isfinite(dist)
     if bad.any():
         raise ValueError(
@@ -113,11 +119,14 @@ def inflate_all(index: PathIndex, edge_t0: np.ndarray, edge_factor: np.ndarray) 
     once via bincount over the index's CSR view; 1.0 for pairs with no edges
     (spec: dynamic cost update). No per-pair Python loop."""
     ptr, flat = index.csr()
-    n2 = len(ptr) - 1
+    n2 = len(ptr) - 1  # number of (i, j) pairs = n*n
+    # owner[k] = which pair the k-th flat edge belongs to (segment id from CSR ptr).
     owner = np.repeat(np.arange(n2), np.diff(ptr))
-    w = edge_t0[flat]
+    w = edge_t0[flat]  # weight each edge by its free-flow time
+    # Weighted mean of edge factors per pair: two bincounts replace a per-pair loop.
     num = np.bincount(owner, weights=w * edge_factor[flat], minlength=n2)
     den = np.bincount(owner, weights=w, minlength=n2)
+    # Pairs with no edges (diagonal, empty paths) have den == 0 -> factor 1.0.
     return np.where(den > 0, num / np.where(den > 0, den, 1.0), 1.0).reshape(index.n, index.n)
 
 
@@ -144,8 +153,10 @@ def update_factors(matrix: CostMatrix, edge_factor: np.ndarray, index: PathIndex
     # ponytail: full vectorised recompute every call (~ms for N=300); switch to
     # index.invalidate_edge-scoped recompute if profiling ever shows this on the path.
     new = inflate_all(index, matrix.edge_t0, np.asarray(edge_factor, float))
-    changed = np.argwhere(~np.isclose(new, matrix.factor))
+    changed = np.argwhere(~np.isclose(new, matrix.factor))  # (k, 2) rows of [i, j]
     if len(changed):
+        # Only swap the matrix and bump the version when something actually moved, so
+        # no-op traffic ticks do not invalidate caches.
         matrix.factor = new
         matrix.version.bump()
     return changed

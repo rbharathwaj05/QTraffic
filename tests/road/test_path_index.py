@@ -1,3 +1,6 @@
+"""Phase 2: hand-built 3-point index. Exact invalidation, conservative fallback for
+partial indexes, CSR view, build() dropping simplified-away nodes, pickle round-trip."""
+
 import numpy as np
 
 from backend.road.path_index import PathIndex, osm_edge_index
