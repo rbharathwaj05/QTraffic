@@ -1,5 +1,8 @@
 """Classical inertia-weight PSO baseline for benchmarking against QPSO/EB-QPSO."""
 
+# STATUS (through Phase 6): contract only. Signatures + docstrings define the formulas;
+# every body raises NotImplementedError until its phase lands. Tests for this module skip.
+
 from __future__ import annotations
 
 import numpy as np

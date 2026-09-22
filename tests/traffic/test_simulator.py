@@ -1,4 +1,7 @@
 import time
+"""Phase 0 stub test: only asserts the module imports. Flipped to real tests when its body lands."""
+
+import pytest
 
 import numpy as np
 

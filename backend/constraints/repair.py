@@ -84,13 +84,15 @@ class RepairResult:
 def positions(fleet: FleetRoute, n_customers: int) -> tuple[np.ndarray, np.ndarray]:
     """(veh, pos) per matrix index 1..N (index 0 unused): vehicle and stop index of each
     customer, first occurrence wins, -1 / 0 when absent. Loops over vehicles only."""
-    segs = [r[1:-1] for r in fleet.routes]
+    segs = [r[1:-1] for r in fleet.routes]  # customer stops only, per vehicle
     flat = np.concatenate(segs)
     length = np.array([len(s) for s in segs])
-    vv = np.repeat(np.arange(len(segs)), length)
-    pp = np.arange(len(flat)) - np.repeat(np.cumsum(length) - length, length)
-    veh = np.full(n_customers + 1, -1, np.int64)
+    vv = np.repeat(np.arange(len(segs)), length)  # vehicle id of each flat stop
+    pp = np.arange(len(flat)) - np.repeat(np.cumsum(length) - length, length)  # index in route
+    veh = np.full(n_customers + 1, -1, np.int64)  # -1 = customer absent (coverage gap)
     pos = np.zeros(n_customers + 1, np.int64)
+    # NumPy scatter with duplicate indices keeps the LAST write; reversing the arrays
+    # makes the first occurrence in route order the one that survives.
     veh[flat[::-1]] = vv[::-1]  # reversed scatter: the FIRST occurrence wins
     pos[flat[::-1]] = pp[::-1]
     return veh, pos
@@ -101,7 +103,7 @@ def route_distance(decoded: FleetRoute, repaired: FleetRoute, eta_a: float, eta_
     n = len(decoded.assignment)
     v0, p0 = positions(decoded, n)
     v1, p1 = positions(repaired, n)
-    d_a = np.count_nonzero(v0[1:] != v1[1:]) / n
+    d_a = np.count_nonzero(v0[1:] != v1[1:]) / n  # [1:] skips the unused depot slot
     d_o = np.abs(p0[1:] - p1[1:]).sum() / n
     return float(eta_a * d_a + eta_o * d_o)
 
@@ -143,21 +145,25 @@ def _best_slot(
     # ponytail: one jitted scan per vehicle (~8 ms/particle at S4); fold into a single
     # CSR kernel over all vehicles if repair shows up in the Phase 13 profile
     scans = [insertion_scan(r, cust, prob, v) for v, r in enumerate(f.routes)]
-    n_slot = np.array([len(r) - 1 for r in f.routes])
+    # Flatten every (vehicle, slot) candidate into parallel arrays so one lexsort picks
+    # the winner across the whole fleet.
+    n_slot = np.array([len(r) - 1 for r in f.routes])  # route of L stops has L-1 slots
     late = np.concatenate([s[0] for s in scans])
     cost = np.concatenate([s[1] for s in scans])
-    cap_ok = np.repeat([s[2] for s in scans], n_slot)
+    cap_ok = np.repeat([s[2] for s in scans], n_slot)  # per-vehicle scalar -> per slot
     veh = np.repeat(np.arange(len(f.routes)), n_slot)
     new_pos = np.arange(len(late)) - np.repeat(np.cumsum(n_slot) - n_slot, n_slot)  # slot p -> p-1
     if strategy == "minimal":
+        # Stops after the insertion point all shift by one: count them as perturbation.
         shifted = np.repeat(n_slot - 1, n_slot) - new_pos
         dist = cfg.eta_a * (veh != dec_veh) + cfg.eta_o * (np.abs(new_pos - dec_pos) + shifted)
     else:
         dist = cost
     # rank: infeasibility first (feasible < capacity-ok-but-late < over capacity)
     rank = np.where(cap_ok & (late == 0.0), 0.0, np.where(cap_ok, 1.0 + late, np.inf))
+    # lexsort: last key is primary -> sort by rank, then dist, then cost; take the best.
     k = np.lexsort((cost, dist, rank))[0]
-    return int(veh[k]), int(new_pos[k]) + 1
+    return int(veh[k]), int(new_pos[k]) + 1  # back to slot index p
 
 
 def _eject_choice(seg: np.ndarray, score: np.ndarray, prob: Problem, strategy: str) -> int:
@@ -176,13 +182,15 @@ def _move_capacity(
     seg = f.routes[v][1:-1]
     excess = prob.demand[seg].sum() - prob.rho_max * prob.capacity[v]
     if strategy == "minimal":
+        # Candidates whose single removal fixes the overload; pick the last one in route
+        # order (shifts the fewest downstream stops). Fallback: largest demand.
         restores = np.flatnonzero(prob.demand[seg] >= excess)
         # smallest sequence change = fewest stops shifted = latest position; the
         # insertion-cost tie-break lives in _best_slot
         idx = int(restores[-1]) if restores.size else int(np.argmax(prob.demand[seg]))
     else:
         idx = _eject_choice(seg, prob.demand[seg], prob, strategy)
-    return _relocate(f, v, idx + 1, prob, cfg, strategy, dec, "capacity")
+    return _relocate(f, v, idx + 1, prob, cfg, strategy, dec, "capacity")  # +1: skip depot
 
 
 def _move_time_window(
@@ -194,22 +202,24 @@ def _move_time_window(
     if strategy == "minimal":
         # feasible in-route relocation with the smallest sequence change [SPEC 8.2]
         best, best_key = None, None
-        pos_r = np.zeros(prob.n_customers + 1, np.int64)
+        pos_r = np.zeros(prob.n_customers + 1, np.int64)  # current position of each stop
         pos_r[r[1:-1]] = np.arange(len(r) - 2)
+        # Try moving each stop i to every other slot of the same route (O(L^2) scans,
+        # each jitted); keep the feasible candidate with the smallest total shift.
         for i in range(1, len(r) - 1):
             rest = np.delete(r, i)
             l2, cost, _ = insertion_scan(rest, int(r[i]), prob, v)
-            for p in np.flatnonzero(l2 == 0.0):
+            for p in np.flatnonzero(l2 == 0.0):  # only zero-lateness slots qualify
                 cand = np.insert(rest, p + 1, r[i])
                 d = int(np.abs(pos_r[cand[1:-1]] - np.arange(len(r) - 2)).sum())  # d_O * N
-                key = (d, cost[p])
+                key = (d, cost[p])  # tuple compare: distance first, cost breaks ties
                 if best_key is None or key < best_key:
                     best, best_key = cand, key
         if best is not None:
             g = _copy(f)
             g.routes[v] = best
             return g, f"time_window: reorder v{v} d_O={best_key[0]}"
-        idx = int(np.flatnonzero(late)[0])  # first late stop
+        idx = int(np.flatnonzero(late)[0])  # no in-route fix exists: eject first late stop
     else:
         idx = _eject_choice(r[1:-1], late, prob, strategy)
     return _relocate(f, v, idx + 1, prob, cfg, strategy, dec, "time_window")
@@ -220,6 +230,7 @@ def _move_availability(
 ) -> tuple[FleetRoute, str]:
     v = vio.vehicle
     seg = f.routes[v][1:-1]
+    # Removing the last stop shortens the route without shifting anyone else.
     idx = len(seg) - 1 if strategy != "smallest_demand" else int(np.argmin(prob.demand[seg]))
     return _relocate(f, v, idx + 1, prob, cfg, strategy, dec, "availability")
 
@@ -236,15 +247,16 @@ def _move_coverage(
     # duplicate -> drop the occurrence deviating further from decoded (veh, pos)
     occ = [(v, i) for v, r in enumerate(f.routes) for i in np.flatnonzero(r[1:-1] == c)]
     dev = [cfg.eta_a * (v != dec_veh[c]) + cfg.eta_o * abs(i - dec_pos[c]) for v, i in occ]
-    v, i = occ[int(np.argmax(dev))]
+    v, i = occ[int(np.argmax(dev))]  # the occurrence farthest from where decode put it
     g = _remove(f, v, i + 1)
-    g.assignment[c - 1] = positions(g, prob.n_customers)[0][c]
+    g.assignment[c - 1] = positions(g, prob.n_customers)[0][c]  # re-sync to surviving copy
     return g, f"coverage: drop duplicate {c} from v{v}@{i}"
 
 
 def _move_depot(f: FleetRoute, vio: Violation, prob, cfg, strategy, dec) -> tuple[FleetRoute, str]:
     g = _copy(f)
     r = g.routes[vio.vehicle]
+    # Strip every depot occurrence, then wrap once: fixes missing ends and interior 0s.
     g.routes[vio.vehicle] = np.concatenate(([0], r[r != 0], [0])).astype(np.int64)
     return g, f"depot: rewrap v{vio.vehicle}"
 
@@ -288,19 +300,20 @@ def repair(
     NO X / particle argument exists here by design [SPEC 8.3] -- see module docstring."""
     if strategy not in STRATEGIES:
         raise ValueError(f"strategy must be one of {STRATEGIES}, got {strategy!r}")
-    dec = positions(decoded, prob.n_customers)
-    fleet, moves, dists = _copy(decoded), [], []
+    dec = positions(decoded, prob.n_customers)  # reference (veh, pos) for "minimal" moves
+    fleet, moves, dists = _copy(decoded), [], []  # work on a copy: input stays untouched
     attempts, d = 0, 0.0
     for _ in range(cfg.MAX_REPAIR_ITERATIONS + 1):  # bounded: never `while not feasible`
         report = check_all(fleet, prob)
-        if report.ok:
+        if report.ok:  # feasible -> done, residual P = 0
             return RepairResult(fleet, report, d, attempts, False, moves, dists)
         attempts += 1
-        if attempts > cfg.MAX_REPAIR_ITERATIONS:
+        if attempts > cfg.MAX_REPAIR_ITERATIONS:  # budget spent: hand back with residual P
             moves.append(f"capped out: residual P={report.total:.4g}")
             return RepairResult(fleet, report, d, attempts - 1, True, moves, dists)
+        # Dispatch on the FIRST violation kind only; the next check_all re-evaluates all.
         fleet, msg = MOVES[report.first.kind](fleet, report.first, prob, cfg, strategy, dec)
         moves.append(msg)
-        d = route_distance(decoded, fleet, cfg.eta_a, cfg.eta_o)
+        d = route_distance(decoded, fleet, cfg.eta_a, cfg.eta_o)  # perturbation so far
         dists.append(d)
     raise AssertionError("unreachable: the loop always returns")  # pragma: no cover

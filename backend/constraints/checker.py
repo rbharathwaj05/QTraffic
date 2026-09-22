@@ -55,6 +55,8 @@ class ViolationReport:
 def check_capacity(fleet: FleetRoute, prob: Problem) -> list[Violation]:
     """Per-vehicle excess max(0, load_v - rho_max Q_v) / (rho_max Q_v) [SPEC 7.3]."""
     flat, ptr = flatten(fleet.routes)
+    # reduceat sums demand over each CSR segment = total load per vehicle, one call.
+    # Depot entries contribute 0 so the [0, ..., 0] wrapping does not matter.
     load = np.add.reduceat(prob.demand[flat], ptr[:-1])
     limit = prob.rho_max * prob.capacity
     excess = np.maximum(0.0, load - limit)
@@ -69,12 +71,13 @@ def check_capacity(fleet: FleetRoute, prob: Problem) -> list[Violation]:
 def check_coverage(fleet: FleetRoute, prob: Problem) -> list[Violation]:
     """Unserved and duplicated customers, magnitude 1 per missing / extra visit
     [SPEC 7.3 coverage]. Holds after the Phase 4 decode; kept as a defensive check."""
+    # Visit count per customer id; [1:] drops the depot slot so counts[k] is customer k+1.
     counts = np.bincount(
         np.concatenate([r[1:-1] for r in fleet.routes]).astype(np.int64),
         minlength=prob.n_customers + 1,
     )[1:]
     out = []
-    missing = tuple(int(c) for c in np.flatnonzero(counts == 0) + 1)
+    missing = tuple(int(c) for c in np.flatnonzero(counts == 0) + 1)  # +1: back to 1..N
     if missing:
         out.append(Violation("coverage", -1, missing, float(len(missing))))
     dup = np.flatnonzero(counts > 1) + 1
@@ -90,8 +93,8 @@ def check_time_windows(fleet: FleetRoute, prob: Problem) -> list[Violation]:
     flat, ptr, A = fleet_arrivals(fleet.routes, prob)
     late = np.maximum(0.0, np.where(np.isfinite(A), A, 0.0) - prob.windows[flat, 1])
     late[flat == 0] = 0.0  # depot ends never late (window [0, inf))
-    owner = np.repeat(np.arange(len(ptr) - 1), np.diff(ptr))
-    per_v = np.bincount(owner, weights=late, minlength=len(ptr) - 1)
+    owner = np.repeat(np.arange(len(ptr) - 1), np.diff(ptr))  # vehicle id of each stop
+    per_v = np.bincount(owner, weights=late, minlength=len(ptr) - 1)  # total lateness / vehicle
     return [
         Violation(
             "time_window",
@@ -107,9 +110,10 @@ def check_availability(fleet: FleetRoute, prob: Problem) -> list[Violation]:
     """Depot return after H_v, magnitude (A_end - H_v) / H_v [SPEC 7.3 availability].
     Non-finite return times are connectivity's business, not reported here."""
     flat, ptr, A = fleet_arrivals(fleet.routes, prob)
+    # ptr[v+1] - 1 is the last element (closing depot) of route v: its arrival = return time.
     over = A[ptr[1:] - 1] - prob.shift_end
     return [
-        Violation(
+        Violation(  # customers = the final stop before returning (ptr[v+1] - 2)
             "availability", int(v), (int(flat[ptr[v + 1] - 2]),), float(over[v] / prob.shift_end[v])
         )
         for v in np.flatnonzero(np.isfinite(over) & (over > 0))
@@ -129,11 +133,13 @@ def check_connectivity(fleet: FleetRoute, prob: Problem) -> list[Violation]:
     """Legs whose effective duration is non-finite (no path in G at this traffic_version),
     magnitude 1 per broken leg; customers = far end of each broken leg."""
     flat, ptr = flatten(fleet.routes)
+    # Every consecutive pair in the flat array, including the fake "end of route v ->
+    # start of route v+1" joins, which are masked out next.
     leg_ok = np.isfinite(prob.duration[flat[:-1], flat[1:]])
     leg_ok[ptr[1:-1] - 1] = True  # joins between consecutive routes are not legs
     if leg_ok.all():
         return []
-    owner = np.repeat(np.arange(len(ptr) - 1), np.diff(ptr))[1:]
+    owner = np.repeat(np.arange(len(ptr) - 1), np.diff(ptr))[1:]  # vehicle of leg's far end
     bad = np.flatnonzero(~leg_ok)
     return [
         Violation(
@@ -143,6 +149,7 @@ def check_connectivity(fleet: FleetRoute, prob: Problem) -> list[Violation]:
     ]
 
 
+# Tuple order == ORDER; check_all relies on this to emit violations in spec order.
 CHECKS = (
     check_capacity,
     check_coverage,

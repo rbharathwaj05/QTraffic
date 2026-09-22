@@ -1,3 +1,5 @@
+"""Phase 3: Customer dict round-trip."""
+
 from backend.fleet.customer import Customer
 
 

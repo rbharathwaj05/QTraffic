@@ -1,3 +1,6 @@
+"""Phase 1: haversine against a known Chennai distance, matrix == scalar form,
+nearest-node snap, and Google's polyline reference vector."""
+
 import numpy as np
 
 from backend.road import geometry as g

@@ -23,6 +23,9 @@ are raw key vectors, and a surviving child enters `X`/`pbest`/`gbest` as keys on
 repaired or 2-opt-polished route is ever encoded back.
 """
 
+# STATUS (through Phase 6): contract only. Signatures + docstrings define the formulas;
+# every body raises NotImplementedError until its phase lands. Tests for this module skip.
+
 from __future__ import annotations
 
 import math

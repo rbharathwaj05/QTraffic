@@ -10,11 +10,15 @@ import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_TOL = 1e-9
+_TOL = 1e-9  # float tolerance for the sum-to-one checks (0.4 + 0.2 + 0.3 + 0.1 != 1.0 exactly)
 
 
 @dataclass
 class QTrafficConfig:
+    """All tunables as dataclass fields; `__post_init__` validates every instance, so an
+    inconsistent config fails at construction rather than deep inside an optimiser run.
+    Construct with keyword overrides, e.g. `QTrafficConfig(M=100, city_bbox=(...))`."""
+
     # --- swarm (spec: QPSO core) --------------------------------------------------
     M: int = 50  # swarm size
     T_iter_max: int = 200  # hard iteration budget per optimisation call
@@ -125,6 +129,7 @@ class QTrafficConfig:
     osrm_url: str = "http://localhost:5000"
     seed: int | None = None
 
+    # Closed [lo, hi] spec ranges checked by validate(); repr=False keeps it out of print().
     _ranges: dict[str, tuple[float, float]] = field(
         default_factory=lambda: {
             "r_E": (0.10, 0.20),
@@ -135,10 +140,11 @@ class QTrafficConfig:
     )
 
     def __post_init__(self) -> None:
-        self.validate()
+        self.validate()  # dataclass hook: runs right after field assignment
 
     def validate(self) -> None:
         """Raise ValueError on any inconsistent parameter group."""
+        # 1. weight groups that must partition 1.0
         groups = {
             "objective weights w_t+w_d+w_c+w_r": self.w_t + self.w_d + self.w_c + self.w_r,
             "route-change split eta_a+eta_o": self.eta_a + self.eta_o,
@@ -147,6 +153,7 @@ class QTrafficConfig:
         for name, total in groups.items():
             if not math.isclose(total, 1.0, abs_tol=_TOL):
                 raise ValueError(f"{name} must sum to 1, got {total}")
+        # 2. scalar fields pinned to a spec interval
         for name, (lo, hi) in self._ranges.items():
             v = getattr(self, name)
             # r_B == 0 is the documented off-switch for the Phase 13 breeding ablation
@@ -156,6 +163,7 @@ class QTrafficConfig:
                 continue
             if not lo <= v <= hi:
                 raise ValueError(f"{name}={v} outside spec range [{lo}, {hi}]")
+        # 3. ordering / sign constraints between related fields
         if not 0 < self.alpha_min <= self.alpha_max:
             raise ValueError("require 0 < alpha_min <= alpha_max")
         if not 0 < self.alpha_min_order <= self.alpha_max_order:

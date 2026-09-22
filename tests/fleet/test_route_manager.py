@@ -1,4 +1,6 @@
 import numpy as np
+"""Phase 0 stub test: only asserts the module imports. Flipped to real tests when its body lands."""
+
 import pytest
 
 from backend.fleet import route_manager as mod

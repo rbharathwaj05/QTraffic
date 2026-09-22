@@ -1,3 +1,8 @@
+"""Phase 5: vectorised raw terms == per-route brute force; route_change matches the
+v4 §19 hand calculation; normalisation can flip rankings and the penalty is additive;
+Bounds are a pure input (same values -> same F, different values -> different F);
+50 ms budget for M=50 N=300."""
+
 import time
 
 import numpy as np

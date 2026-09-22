@@ -28,6 +28,9 @@ Cooldown is per vehicle and in SIM seconds [v4 47]: a vehicle may be re-planned 
 `t_sim - last_reopt[v] >= T_cool`, unless the override fires.
 """
 
+# STATUS (through Phase 6): contract only. Signatures + docstrings define the formulas;
+# every body raises NotImplementedError until its phase lands. Tests for this module skip.
+
 from __future__ import annotations
 
 from collections.abc import Iterable

@@ -1,3 +1,5 @@
+"""Phase 0: the FastAPI app boots and /health answers."""
+
 from fastapi.testclient import TestClient
 
 from backend.main import app

@@ -12,6 +12,9 @@ same way a 1x run does [doc2 23]. `take_batch()` hands the batch to the controll
 the window has closed; until then `pending_batch` accumulates.
 """
 
+# STATUS (through Phase 6): contract only. Signatures + docstrings define the formulas;
+# every body raises NotImplementedError until its phase lands. Tests for this module skip.
+
 from __future__ import annotations
 
 import numpy as np

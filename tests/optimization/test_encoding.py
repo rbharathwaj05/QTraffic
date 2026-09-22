@@ -1,3 +1,7 @@
+"""Phase 4: spec worked example (y=0.62, 20 vehicles), one-hot shapes, decode covers
+every customer once in z-order per vehicle, decode is pure + deterministic,
+decode(encode(r)) == r, and a 50 ms budget for M=50 N=300 M_veh=50."""
+
 import time
 
 import numpy as np

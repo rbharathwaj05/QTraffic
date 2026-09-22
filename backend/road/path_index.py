@@ -40,13 +40,15 @@ class PathIndex:
     (spec: path index / event-to-route impact)."""
 
     def __init__(self) -> None:
-        self.n = 0
+        self.n = 0  # number of points (depot + customers)
+        # Forward map: (i, j) -> int64 array of edge ids in path order.
         self.pair_to_edges: dict[tuple[int, int], np.ndarray] = {}
+        # Inverse map: edge id -> set of (i, j) pairs whose path uses that edge.
         self.edge_to_pairs: dict[int, set[tuple[int, int]]] = {}
         # Pairs whose OSRM path left the graph somewhere: their edge list is a subset of
         # the truth, so `invalidate_edge` must be conservative for unknown edges.
         self.partial: set[tuple[int, int]] = set()
-        self._csr: tuple[np.ndarray, np.ndarray] | None = None
+        self._csr: tuple[np.ndarray, np.ndarray] | None = None  # lazy cache, see csr()
 
     @property
     def complete(self) -> bool:
@@ -67,6 +69,7 @@ class PathIndex:
         up as (u, v). A missing (u, v) marks the pair `partial`.
         """
         self.n = len(points)
+        # Set of OSM node ids that survived osmnx simplification (endpoints of some edge).
         graph_nodes = {u for u, _ in osm_node_to_edge} | {v for _, v in osm_node_to_edge}
         pairs = [(i, j) for i in range(self.n) for j in range(self.n) if i != j]
 
@@ -74,10 +77,12 @@ class PathIndex:
             i, j = pair
             return pair, client.route([points[i], points[j]]).node_ids
 
+        # N*(N-1) HTTP calls are I/O-bound; a thread pool overlaps them. Results are
+        # consumed in submission order so the index is deterministic.
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for (i, j), node_ids in pool.map(one, pairs):
                 self.add_path(i, j, node_ids, graph_nodes, osm_node_to_edge)
-        for i in range(self.n):
+        for i in range(self.n):  # diagonal: staying put uses no edges
             self.pair_to_edges[(i, i)] = np.empty(0, dtype=np.int64)
 
     def add_path(
@@ -89,18 +94,22 @@ class PathIndex:
         osm_node_to_edge: dict[tuple[int, int], int],
     ) -> None:
         """Insert one (i, i_to) path given its OSM node sequence."""
+        # Drop intermediate OSM nodes that osmnx simplified away; what remains should be
+        # consecutive endpoints of graph edges.
         seq = [n for n in node_ids if n in graph_nodes]
         edges = []
         for u, v in zip(seq, seq[1:]):
             e = osm_node_to_edge.get((u, v))
             if e is None:
+                # OSRM used a road the graph does not have (different extract / pruning):
+                # remember the pair is incomplete so invalidation stays conservative.
                 self.partial.add((i, i_to))
             else:
                 edges.append(e)
         self.pair_to_edges[(i, i_to)] = np.array(edges, dtype=np.int64)
-        for e in edges:
+        for e in edges:  # maintain the inverse map
             self.edge_to_pairs.setdefault(e, set()).add((i, i_to))
-        self._csr = None
+        self._csr = None  # invalidate the cached CSR view
 
     def edges_on(self, i: int, j: int) -> np.ndarray:
         """Edge ids along path(i, j); empty array if i == j."""
@@ -129,6 +138,8 @@ class PathIndex:
         """Flat (ptr, edges) over pairs in row-major (i*n + j) order for vectorised
         aggregation; cached until the next `add_path`."""
         if self._csr is None:
+            # Compressed-sparse-row layout: edges of pair k = flat[ptr[k]:ptr[k+1]],
+            # k = i*n + j. Lets cost_matrix.inflate_all aggregate with one bincount.
             lists = [self.edges_on(i, j) for i in range(self.n) for j in range(self.n)]
             ptr = np.zeros(len(lists) + 1, dtype=np.int64)
             ptr[1:] = np.cumsum([len(x) for x in lists])
@@ -138,6 +149,8 @@ class PathIndex:
 
     # -- persistence: later phases load, never recompute ----------------------------
     def save(self, path: Path) -> None:
+        # Pickle the instance dict (plain dicts/sets/arrays), not the class, so the file
+        # survives renames of this module.
         Path(path).write_bytes(pickle.dumps(self.__dict__))
 
     @classmethod
