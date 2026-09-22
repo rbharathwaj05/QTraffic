@@ -1,3 +1,7 @@
+"""Phase 1: real OSM download of a ~1.5 km T. Nagar bbox (skips offline). Checks the
+cleaned graph is strongly connected, every edge has length/speed/travel_time,
+batched snapping + depot pick work, GraphML cache round-trips, GeoJSON is LineStrings."""
+
 import networkx as nx
 import pytest
 

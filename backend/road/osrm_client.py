@@ -47,11 +47,13 @@ class OSRMClient:
     # -- transport -------------------------------------------------------------------
     def _get(self, service: str, coords: list[tuple[float, float]], params: dict) -> dict:
         """GET `/<service>/v1/driving/<lon,lat;...>?params`, raise on non-Ok code."""
+        # OSRM wants "lon,lat" pairs separated by ";" (note: lon first, unlike our tuples).
         path = ";".join(f"{lon:.6f},{lat:.6f}" for lat, lon in coords)
         url = f"{self.base_url}/{service}/v1/driving/{path}?{urllib.parse.urlencode(params)}"
+        # stdlib urllib only: no extra HTTP dependency for two GET endpoints.
         with urllib.request.urlopen(url, timeout=self.timeout_s) as resp:
             body = json.load(resp)
-        if body.get("code") != "Ok":
+        if body.get("code") != "Ok":  # OSRM signals errors in the JSON body, not HTTP status
             raise RuntimeError(f"OSRM {service}: {body.get('code')} {body.get('message', '')}")
         return body
 
@@ -63,16 +65,17 @@ class OSRMClient:
         `path_index` uses to map routes onto graph edges (spec: path index).
         """
         params = {
-            "overview": "full",
-            "geometries": "geojson",
-            "annotations": "nodes" if annotations else "false",
+            "overview": "full",  # full-resolution geometry (not simplified)
+            "geometries": "geojson",  # coordinates as [lon, lat] arrays, no polyline decode
+            "annotations": "nodes" if annotations else "false",  # OSM node ids per leg
         }
-        r = self._get("route", coords, params)["routes"][0]
+        r = self._get("route", coords, params)["routes"][0]  # first (best) route only
+        # A route with k waypoints has k-1 legs; concatenate their node lists in order.
         nodes = [n for leg in r["legs"] for n in leg["annotation"]["nodes"]] if annotations else []
         return RouteResult(
             duration_s=float(r["duration"]),
             distance_m=float(r["distance"]),
-            geometry=[(lat, lon) for lon, lat in r["geometry"]["coordinates"]],
+            geometry=[(lat, lon) for lon, lat in r["geometry"]["coordinates"]],  # -> (lat, lon)
             node_ids=[int(n) for n in nodes],
         )
 
@@ -90,19 +93,23 @@ class OSRMClient:
         """
         dests = sources if destinations is None else destinations
         S, D = len(sources), len(dests)
-        dur = np.full((S, D), np.nan)
+        dur = np.full((S, D), np.nan)  # nan = not yet filled / unroutable
         dist = np.full((S, D), np.nan)
+        # Block size b: each request carries b sources + b destinations <= max_table_size.
         b = max(1, self.max_table_size // 2)
-        for r0 in range(0, S, b):
+        for r0 in range(0, S, b):  # row blocks (sources)
             src = sources[r0 : r0 + b]
-            for c0 in range(0, D, b):
+            for c0 in range(0, D, b):  # column blocks (destinations)
                 dst = dests[c0 : c0 + b]
+                # Coordinates are sent as src + dst; "sources"/"destinations" are indices
+                # into that concatenated list telling OSRM which are which.
                 params = {
                     "annotations": "duration,distance",
                     "sources": ";".join(map(str, range(len(src)))),
                     "destinations": ";".join(map(str, range(len(src), len(src) + len(dst)))),
                 }
                 body = self._get("table", src + dst, params)
+                # Scatter the returned block into its slice of the full matrix.
                 dur[r0 : r0 + len(src), c0 : c0 + len(dst)] = _block(body["durations"])
                 dist[r0 : r0 + len(src), c0 : c0 + len(dst)] = _block(body["distances"])
         return dur, dist

@@ -1,3 +1,8 @@
+"""Phase 6: SPEC 8.3 worked example (eject C4), every move type on a minimal case,
+cascade caps out with a soft penalty that flows through fitness.evaluate, the
+signature has no particle argument, input is never mutated, no `while` in the module,
+all three ablation strategies, and a 25-particle fuzz that always terminates + covers."""
+
 import inspect
 import re
 import threading

@@ -1,5 +1,8 @@
 """Re-plan controller: decides if/when/how wide to re-optimise after traffic changes."""
 
+# STATUS (through Phase 6): contract only. Signatures + docstrings define the formulas;
+# every body raises NotImplementedError until its phase lands. Tests for this module skip.
+
 from __future__ import annotations
 
 from dataclasses import dataclass

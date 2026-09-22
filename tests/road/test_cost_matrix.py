@@ -1,3 +1,7 @@
+"""Phase 2: build_cost_matrices makes exactly one /table call and rejects nan;
+effective_duration is a pure array op (zero OSRM calls); update_factors reproduces the
+weighted-mean formula on the synthetic index and bumps TrafficVersion; npz round-trip."""
+
 import time
 
 import numpy as np

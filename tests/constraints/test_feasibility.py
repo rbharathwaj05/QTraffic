@@ -1,3 +1,7 @@
+"""Phase 6: arrival recurrence waits when early and is late when a window closes;
+load ratio / capacity predicates; insertion_scan lateness + detour cost per slot,
+availability folded in, inf for unroutable legs, capacity independent of slot."""
+
 import numpy as np
 
 from backend.constraints import feasibility as mod

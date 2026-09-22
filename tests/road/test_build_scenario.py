@@ -1,3 +1,6 @@
+"""Phase 2: end-to-end precompute with FakeOSRM on the test bbox: call counts, shapes,
+and load_scenario reading back identical arrays. Skips offline."""
+
 import time
 
 import numpy as np

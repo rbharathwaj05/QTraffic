@@ -1,3 +1,5 @@
+"""Phase 0 stub test: only asserts the module imports. Flipped to real tests when its body lands."""
+
 import pytest
 
 import backend.optimization.benchmark as mod  # import must succeed even while bodies are stubs
