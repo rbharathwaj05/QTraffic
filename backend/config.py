@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 
 _TOL = 1e-9
 
@@ -65,6 +66,13 @@ class QTrafficConfig:
 
     # --- capacity (spec: feasibility) ----------------------------------------------
     rho_max: float = 0.95  # max vehicle load ratio
+
+    # --- road graph (spec: road model, data acquisition) ---------------------------
+    city_query: str = "Chennai, India"  # osmnx place query
+    # (west, south, east, north); when set, overrides city_query. Small bboxes for tests.
+    city_bbox: tuple[float, float, float, float] | None = None
+    city_cache_dir: Path = Path("data/city")  # GraphML cache location
+    depot_latlon: tuple[float, float] | None = None  # None -> graph centroid
 
     # --- infra --------------------------------------------------------------------
     redis_url: str = "redis://localhost:6379/0"
