@@ -36,6 +36,9 @@ backend/
   main.py              FastAPI app (health only)
   road/                Phase 1-2: graph, OSRM, cost matrices, path index, scenario precompute
   fleet/               Phase 3: Customer / Vehicle schema, scenario generator
+  optimization/        Phase 4-7: encoding, fitness, qpso; ebqpso/pso/ga/aco stubs
+  constraints/         Phase 6: feasibility, checker, repair
+  traffic/             stub: events, congestion, simulator, controller
   optimization/        Phase 4-5: encoding, fitness; qpso/ebqpso/pso/ga/aco/benchmark stubs
   constraints/         Phase 6: feasibility predicates, fixed-order checker, bounded repair
   traffic/             Phase 7 (stub): events, congestion, simulator, controller
@@ -44,6 +47,7 @@ backend/
 scripts/
   inspect_graph.py     print node/edge counts and depot for the configured city
   generate_scenario.py write S1..S5 customer/vehicle/depot JSON
+  run_qpso.py          run QPSO on one scenario, write convergence curves to benchmarks/
 data/
   city/                GraphML cache, OSM .pbf, OSRM .osrm* (gitignored)
   scenarios/<name>/    customers.json, vehicles.json, depot.json (committed)
@@ -292,6 +296,12 @@ edge_factor, index)` rewrites `factor` and bumps `TrafficVersion` →
 | 3 | Customer/Vehicle schema, scenario generator S1–S5 | done |
 | 4 | random-key encode/decode, vectorised over the swarm | done |
 | 5 | canonical normalised fitness `evaluate()` | done |
+| 6 | feasibility, fixed-order checker, bounded repair | done |
+| 7 | plain QPSO engine, 2-opt polish, `scripts/run_qpso.py` | done |
+| 8+ | EB-QPSO / baselines, traffic simulation, controller, API, frontend | stub |
+
+Test suite at Phase 7: `91 passed, 18 skipped` (skips are Phase 0 stub tests, kept
+until their bodies land).
 | 6 | feasibility predicates, fixed-order checker, bounded minimal-perturbation repair | done |
 | 7+ | QPSO / EB-QPSO / baselines, traffic simulation, controller, API, frontend | stub |
 

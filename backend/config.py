@@ -25,10 +25,27 @@ class QTrafficConfig:
     T_iter_min: int = 20  # floor before stagnation / response-budget may stop early
     alpha_max: float = 1.0  # contraction-expansion coefficient at t=0
     alpha_min: float = 0.4  # contraction-expansion coefficient at t=T_iter
+    alpha_update_every: int = 5  # re-project T every K iterations [SPEC 7.4 alpha schedule]
+    two_opt_max_passes: int = 4  # bound on the gbest-route polish [SPEC 7.5]
 
     # --- elite breeding (spec: EB-QPSO) --------------------------------------------
-    r_E: float = 0.15  # elite fraction, spec range [0.10, 0.20]
-    r_B: float = 0.08  # breeding fraction, spec range [0.05, 0.10]
+    r_E: float = 0.15  # elite fraction, spec range [0.10, 0.20]           [v4 29]
+    r_B: float = 0.08  # breeding fraction, spec range [0.05, 0.10]        [v4 32]
+    # Breeding noise sigma [v4 31]. The spec gives the FORM of the term (sigma * eps,
+    # eps ~ N(0, I)) but NO numeric default, so these are experimental knobs to be tuned
+    # and ablated [v4 71]; 0.05 is a deliberately conservative starting point (a child
+    # lands within ~0.1 of the parent blend in key space, i.e. usually the same permutation
+    # with a few swapped ranks).
+    sigma_A: float = 0.05  # breeding noise on the assignment block Y      [v4 31]
+    sigma_O: float = 0.05  # breeding noise on the ordering block Z        [v4 31]
+    # Block-aware alpha [v4 28]: the two key blocks may contract on separate schedules.
+    # ON by default per v4; the Phase 13 ablation turns it off to separate its effect from
+    # breeding itself. The spec gives no numbers for the per-block endpoints, so both
+    # default to the shared alpha_max/alpha_min -- enabled-with-defaults is numerically
+    # identical to disabled until these are retuned.
+    block_alpha: bool = True  # per-block contraction-expansion schedules  [v4 28]
+    alpha_max_order: float = 1.0  # alpha_O at t=0, Z-block                [v4 28]
+    alpha_min_order: float = 0.4  # alpha_O at t=T_proj, Z-block           [v4 28]
 
     # --- objective weights (spec: fitness function), must sum to 1 -----------------
     w_t: float = 0.40  # total travel time
@@ -50,7 +67,25 @@ class QTrafficConfig:
     theta_override: float = 0.30  # delta that bypasses cooldown entirely
 
     # --- cooldown (spec: re-plan controller) ---------------------------------------
-    T_cool: float = 120.0  # seconds of sim time between non-override re-plans
+    T_cool: float = 120.0  # seconds of SIM time between non-override re-plans [v4 47]
+    persistence_cycles: int = 2  # consecutive cycles above theta_soft to fire [v4 46]
+    epsilon_F: float = 1e-9  # floor in Delta = (F_after - F_before) / max(F_before, eps)
+    debounce_s: float = 2.0  # SIM seconds: events inside this window = one controller pass
+    # Performance crossover, not a correctness knob: above this share of the OD matrix the
+    # per-pair scoped update is slower than one vectorised full recompute [SPEC 10.2].
+    scoped_update_max_fraction: float = 0.5
+    local_scope_fraction: float = 0.5  # affected/total above this -> FLEET not LOCAL
+
+    # --- congestion (spec 7.2 / v4 3) ----------------------------------------------
+    # NOTE: distinct from `rho_max` above, which is the vehicle LOAD ratio. This one caps
+    # the road congestion level rho_ij(t) so V_ij = V_normal (1 - rho) never reaches 0.
+    rho_congestion_max: float = 0.95  # rho_ij(t) in [0, 0.95) [SPEC 7.2]
+    # Fleet-induced congestion is NOT in the core v3/v4 spec -- it is an enhancement from
+    # the architecture doc (doc2 9). Off by default; the core degradation math never reads
+    # it, so the ablation is a flag flip.
+    enable_fleet_congestion: bool = False
+    bpr_alpha: float = 0.15  # BPR a: t/t0 = 1 + a (q/c)^b (doc2 9, not core spec)
+    bpr_beta: float = 4.0  # BPR b
 
     # --- warm start (spec: warm start), must sum to 1 ------------------------------
     warm_fraction: float = 0.20  # particles seeded from incumbent solution
@@ -86,6 +121,9 @@ class QTrafficConfig:
     tw_width_range: tuple[int, int] = (1800, 7200)  # s, uniform width of a tight window
     tw_anytime_fraction: float = 0.20  # share of customers with window [0, shift_end_s)
 
+    # --- offline fallback (no OSRM): haversine distance / this speed -> durations -----
+    fallback_speed_mps: float = 8.33  # 30 km/h; only used when no OSRM matrices exist
+
     # --- infra --------------------------------------------------------------------
     redis_url: str = "redis://localhost:6379/0"
     osrm_url: str = "http://localhost:5000"
@@ -118,18 +156,35 @@ class QTrafficConfig:
         # 2. scalar fields pinned to a spec interval
         for name, (lo, hi) in self._ranges.items():
             v = getattr(self, name)
+            # r_B == 0 is the documented off-switch for the Phase 13 breeding ablation
+            # ("EB-QPSO with breeding disabled must equal plain QPSO"); any other value
+            # must sit inside the spec range [v4 32].
+            if name == "r_B" and v == 0.0:
+                continue
             if not lo <= v <= hi:
                 raise ValueError(f"{name}={v} outside spec range [{lo}, {hi}]")
         # 3. ordering / sign constraints between related fields
         if not 0 < self.alpha_min <= self.alpha_max:
             raise ValueError("require 0 < alpha_min <= alpha_max")
+        if not 0 < self.alpha_min_order <= self.alpha_max_order:
+            raise ValueError("require 0 < alpha_min_order <= alpha_max_order")
+        if self.sigma_A < 0 or self.sigma_O < 0:
+            raise ValueError("require sigma_A >= 0 and sigma_O >= 0")
         if not self.theta_soft <= self.theta_hard <= self.theta_override:
             raise ValueError("require theta_soft <= theta_hard <= theta_override")
         if not 0 < self.rho_max <= 1:
             raise ValueError("require 0 < rho_max <= 1")
+        if not 0 < self.rho_congestion_max < 1:
+            raise ValueError("require 0 < rho_congestion_max < 1")
+        if self.T_cool < 0 or self.debounce_s < 0 or self.persistence_cycles < 1:
+            raise ValueError("require T_cool >= 0, debounce_s >= 0, persistence_cycles >= 1")
+        if not 0 <= self.scoped_update_max_fraction <= 1:
+            raise ValueError("require 0 <= scoped_update_max_fraction <= 1")
         if not 0 <= self.tw_anytime_fraction <= 1:
             raise ValueError("require 0 <= tw_anytime_fraction <= 1")
         if self.tw_width_range[1] > self.shift_end_s or self.tw_width_range[0] <= 0:
             raise ValueError("require 0 < tw_width_range <= shift_end_s")
         if self.M <= 0 or self.T_iter_min <= 0 or self.T_iter_min > self.T_iter_max:
             raise ValueError("require M > 0 and 0 < T_iter_min <= T_iter_max")
+        if self.alpha_update_every <= 0 or self.two_opt_max_passes < 0:
+            raise ValueError("require alpha_update_every > 0 and two_opt_max_passes >= 0")
