@@ -21,6 +21,8 @@ class QTrafficConfig:
     T_iter_min: int = 20  # floor before stagnation / response-budget may stop early
     alpha_max: float = 1.0  # contraction-expansion coefficient at t=0
     alpha_min: float = 0.4  # contraction-expansion coefficient at t=T_iter
+    alpha_update_every: int = 5  # re-project T every K iterations [SPEC 7.4 alpha schedule]
+    two_opt_max_passes: int = 4  # bound on the gbest-route polish [SPEC 7.5]
 
     # --- elite breeding (spec: EB-QPSO) --------------------------------------------
     r_E: float = 0.15  # elite fraction, spec range [0.10, 0.20]
@@ -82,6 +84,9 @@ class QTrafficConfig:
     tw_width_range: tuple[int, int] = (1800, 7200)  # s, uniform width of a tight window
     tw_anytime_fraction: float = 0.20  # share of customers with window [0, shift_end_s)
 
+    # --- offline fallback (no OSRM): haversine distance / this speed -> durations -----
+    fallback_speed_mps: float = 8.33  # 30 km/h; only used when no OSRM matrices exist
+
     # --- infra --------------------------------------------------------------------
     redis_url: str = "redis://localhost:6379/0"
     osrm_url: str = "http://localhost:5000"
@@ -125,3 +130,5 @@ class QTrafficConfig:
             raise ValueError("require 0 < tw_width_range <= shift_end_s")
         if self.M <= 0 or self.T_iter_min <= 0 or self.T_iter_min > self.T_iter_max:
             raise ValueError("require M > 0 and 0 < T_iter_min <= T_iter_max")
+        if self.alpha_update_every <= 0 or self.two_opt_max_passes < 0:
+            raise ValueError("require alpha_update_every > 0 and two_opt_max_passes >= 0")
