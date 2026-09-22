@@ -1,0 +1,902 @@
+[
+ {
+  "vehicle_id": "v000",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v001",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v002",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v003",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v004",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v005",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v006",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v007",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v008",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v009",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v010",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v011",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v012",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v013",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v014",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v015",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v016",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v017",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v018",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v019",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v020",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v021",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v022",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v023",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v024",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v025",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v026",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v027",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v028",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v029",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v030",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v031",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v032",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v033",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v034",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v035",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v036",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v037",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v038",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v039",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v040",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v041",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v042",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v043",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v044",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v045",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v046",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v047",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v048",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v049",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v050",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v051",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v052",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v053",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v054",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v055",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v056",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v057",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v058",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v059",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v060",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v061",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v062",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v063",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v064",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v065",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v066",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v067",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v068",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v069",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v070",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v071",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v072",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v073",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v074",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v075",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v076",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v077",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v078",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v079",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v080",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v081",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v082",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v083",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v084",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v085",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v086",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v087",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v088",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v089",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v090",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v091",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v092",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v093",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v094",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v095",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v096",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v097",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v098",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v099",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ }
+]

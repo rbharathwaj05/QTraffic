@@ -1,0 +1,502 @@
+[
+ {
+  "customer_id": "c000",
+  "lat": 13.0478769,
+  "lon": 80.2647936,
+  "node_id": 259773884,
+  "demand": 2,
+  "service_time": 457,
+  "time_window_start": 7086.1,
+  "time_window_end": 10382.6
+ },
+ {
+  "customer_id": "c001",
+  "lat": 13.194937,
+  "lon": 80.2298713,
+  "node_id": 3905305412,
+  "demand": 6,
+  "service_time": 465,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c002",
+  "lat": 12.9187569,
+  "lon": 80.2566609,
+  "node_id": 370651651,
+  "demand": 2,
+  "service_time": 599,
+  "time_window_start": 12358.6,
+  "time_window_end": 17168.6
+ },
+ {
+  "customer_id": "c003",
+  "lat": 13.2053398,
+  "lon": 80.2577522,
+  "node_id": 344898241,
+  "demand": 4,
+  "service_time": 252,
+  "time_window_start": 7381.2,
+  "time_window_end": 11875.7
+ },
+ {
+  "customer_id": "c004",
+  "lat": 12.976858,
+  "lon": 80.2668013,
+  "node_id": 313138971,
+  "demand": 7,
+  "service_time": 327,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c005",
+  "lat": 13.0137243,
+  "lon": 80.2043941,
+  "node_id": 308313485,
+  "demand": 8,
+  "service_time": 184,
+  "time_window_start": 11592.1,
+  "time_window_end": 16500.9
+ },
+ {
+  "customer_id": "c006",
+  "lat": 13.167265,
+  "lon": 80.244186,
+  "node_id": 978213084,
+  "demand": 6,
+  "service_time": 127,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c007",
+  "lat": 13.0100229,
+  "lon": 80.1797301,
+  "node_id": 7784062400,
+  "demand": 7,
+  "service_time": 142,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c008",
+  "lat": 13.072098,
+  "lon": 80.2901754,
+  "node_id": 8634681875,
+  "demand": 3,
+  "service_time": 335,
+  "time_window_start": 11204.2,
+  "time_window_end": 17526.5
+ },
+ {
+  "customer_id": "c009",
+  "lat": 12.8740031,
+  "lon": 80.208266,
+  "node_id": 11158476694,
+  "demand": 9,
+  "service_time": 204,
+  "time_window_start": 986.8,
+  "time_window_end": 3088.5
+ },
+ {
+  "customer_id": "c010",
+  "lat": 13.1381698,
+  "lon": 80.1887557,
+  "node_id": 7823024443,
+  "demand": 2,
+  "service_time": 477,
+  "time_window_start": 20758.9,
+  "time_window_end": 24641.1
+ },
+ {
+  "customer_id": "c011",
+  "lat": 13.0570213,
+  "lon": 80.1618584,
+  "node_id": 11795070613,
+  "demand": 8,
+  "service_time": 212,
+  "time_window_start": 1238.8,
+  "time_window_end": 6065.5
+ },
+ {
+  "customer_id": "c012",
+  "lat": 12.9787095,
+  "lon": 80.1894577,
+  "node_id": 1923939036,
+  "demand": 1,
+  "service_time": 421,
+  "time_window_start": 19572.8,
+  "time_window_end": 24722.6
+ },
+ {
+  "customer_id": "c013",
+  "lat": 13.1534648,
+  "lon": 80.2869387,
+  "node_id": 9577445276,
+  "demand": 7,
+  "service_time": 378,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c014",
+  "lat": 12.9692406,
+  "lon": 80.2653404,
+  "node_id": 1453466168,
+  "demand": 3,
+  "service_time": 278,
+  "time_window_start": 22955.3,
+  "time_window_end": 26911.4
+ },
+ {
+  "customer_id": "c015",
+  "lat": 13.0255453,
+  "lon": 80.1646795,
+  "node_id": 11617893209,
+  "demand": 3,
+  "service_time": 336,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c016",
+  "lat": 12.9018554,
+  "lon": 80.2173427,
+  "node_id": 7791345840,
+  "demand": 4,
+  "service_time": 600,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c017",
+  "lat": 13.0067055,
+  "lon": 80.2206349,
+  "node_id": 365988855,
+  "demand": 8,
+  "service_time": 580,
+  "time_window_start": 10536.1,
+  "time_window_end": 15494.9
+ },
+ {
+  "customer_id": "c018",
+  "lat": 12.93237,
+  "lon": 80.2584314,
+  "node_id": 370921451,
+  "demand": 8,
+  "service_time": 253,
+  "time_window_start": 11709.7,
+  "time_window_end": 13862.3
+ },
+ {
+  "customer_id": "c019",
+  "lat": 12.9524881,
+  "lon": 80.2320209,
+  "node_id": 6819609667,
+  "demand": 3,
+  "service_time": 578,
+  "time_window_start": 16894.8,
+  "time_window_end": 18976.6
+ },
+ {
+  "customer_id": "c020",
+  "lat": 13.137556,
+  "lon": 80.2520145,
+  "node_id": 7818595875,
+  "demand": 6,
+  "service_time": 224,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c021",
+  "lat": 12.9670151,
+  "lon": 80.2649703,
+  "node_id": 1453466092,
+  "demand": 1,
+  "service_time": 503,
+  "time_window_start": 17740.4,
+  "time_window_end": 20284.7
+ },
+ {
+  "customer_id": "c022",
+  "lat": 13.0374446,
+  "lon": 80.2783728,
+  "node_id": 12603569719,
+  "demand": 9,
+  "service_time": 286,
+  "time_window_start": 4422.3,
+  "time_window_end": 11534.5
+ },
+ {
+  "customer_id": "c023",
+  "lat": 13.1278802,
+  "lon": 80.2104484,
+  "node_id": 11032124266,
+  "demand": 10,
+  "service_time": 443,
+  "time_window_start": 9535.2,
+  "time_window_end": 11350.1
+ },
+ {
+  "customer_id": "c024",
+  "lat": 13.0583264,
+  "lon": 80.1622025,
+  "node_id": 256018881,
+  "demand": 4,
+  "service_time": 433,
+  "time_window_start": 13596.1,
+  "time_window_end": 17371.7
+ },
+ {
+  "customer_id": "c025",
+  "lat": 12.9582514,
+  "lon": 80.1882645,
+  "node_id": 1896004067,
+  "demand": 6,
+  "service_time": 526,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c026",
+  "lat": 12.9147294,
+  "lon": 80.1960253,
+  "node_id": 5745671536,
+  "demand": 6,
+  "service_time": 303,
+  "time_window_start": 2884.7,
+  "time_window_end": 8140.8
+ },
+ {
+  "customer_id": "c027",
+  "lat": 13.049369,
+  "lon": 80.1999631,
+  "node_id": 300218856,
+  "demand": 8,
+  "service_time": 571,
+  "time_window_start": 25834.7,
+  "time_window_end": 27885.9
+ },
+ {
+  "customer_id": "c028",
+  "lat": 12.8980283,
+  "lon": 80.2475793,
+  "node_id": 370639763,
+  "demand": 1,
+  "service_time": 543,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c029",
+  "lat": 13.098601,
+  "lon": 80.2936587,
+  "node_id": 262628655,
+  "demand": 6,
+  "service_time": 130,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c030",
+  "lat": 13.1465535,
+  "lon": 80.2908714,
+  "node_id": 7819860492,
+  "demand": 9,
+  "service_time": 167,
+  "time_window_start": 9126.8,
+  "time_window_end": 12394.5
+ },
+ {
+  "customer_id": "c031",
+  "lat": 13.0873133,
+  "lon": 80.2898644,
+  "node_id": 258987169,
+  "demand": 7,
+  "service_time": 176,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c032",
+  "lat": 13.2029955,
+  "lon": 80.2822215,
+  "node_id": 9741287821,
+  "demand": 6,
+  "service_time": 430,
+  "time_window_start": 18402.4,
+  "time_window_end": 24551.8
+ },
+ {
+  "customer_id": "c033",
+  "lat": 12.869417,
+  "lon": 80.2504753,
+  "node_id": 7768606762,
+  "demand": 1,
+  "service_time": 293,
+  "time_window_start": 25033.4,
+  "time_window_end": 28276.2
+ },
+ {
+  "customer_id": "c034",
+  "lat": 13.0277742,
+  "lon": 80.2713564,
+  "node_id": 264031366,
+  "demand": 10,
+  "service_time": 193,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c035",
+  "lat": 12.8784572,
+  "lon": 80.2357426,
+  "node_id": 6776657072,
+  "demand": 2,
+  "service_time": 165,
+  "time_window_start": 10759.1,
+  "time_window_end": 17011.3
+ },
+ {
+  "customer_id": "c036",
+  "lat": 13.0959403,
+  "lon": 80.1550753,
+  "node_id": 11811688834,
+  "demand": 4,
+  "service_time": 560,
+  "time_window_start": 8863.7,
+  "time_window_end": 14691.8
+ },
+ {
+  "customer_id": "c037",
+  "lat": 13.1755727,
+  "lon": 80.2324676,
+  "node_id": 7793388954,
+  "demand": 7,
+  "service_time": 408,
+  "time_window_start": 16154.8,
+  "time_window_end": 18639.6
+ },
+ {
+  "customer_id": "c038",
+  "lat": 13.0784335,
+  "lon": 80.1810037,
+  "node_id": 7823176109,
+  "demand": 5,
+  "service_time": 136,
+  "time_window_start": 5666.4,
+  "time_window_end": 11820.7
+ },
+ {
+  "customer_id": "c039",
+  "lat": 12.9684664,
+  "lon": 80.181966,
+  "node_id": 11625869955,
+  "demand": 6,
+  "service_time": 245,
+  "time_window_start": 2261.8,
+  "time_window_end": 8550.5
+ },
+ {
+  "customer_id": "c040",
+  "lat": 13.1712884,
+  "lon": 80.2371065,
+  "node_id": 7793188547,
+  "demand": 6,
+  "service_time": 435,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c041",
+  "lat": 13.0481086,
+  "lon": 80.2804033,
+  "node_id": 9181594200,
+  "demand": 2,
+  "service_time": 247,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c042",
+  "lat": 13.0475115,
+  "lon": 80.1971558,
+  "node_id": 4934285352,
+  "demand": 1,
+  "service_time": 487,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c043",
+  "lat": 13.1372142,
+  "lon": 80.2874409,
+  "node_id": 289464311,
+  "demand": 10,
+  "service_time": 258,
+  "time_window_start": 25362.5,
+  "time_window_end": 28477.4
+ },
+ {
+  "customer_id": "c044",
+  "lat": 12.9118975,
+  "lon": 80.2361906,
+  "node_id": 7800983485,
+  "demand": 9,
+  "service_time": 424,
+  "time_window_start": 9878.7,
+  "time_window_end": 14346.3
+ },
+ {
+  "customer_id": "c045",
+  "lat": 13.1485049,
+  "lon": 80.1781214,
+  "node_id": 3886148947,
+  "demand": 2,
+  "service_time": 167,
+  "time_window_start": 7249.5,
+  "time_window_end": 11869.5
+ },
+ {
+  "customer_id": "c046",
+  "lat": 13.1109116,
+  "lon": 80.297259,
+  "node_id": 289202132,
+  "demand": 7,
+  "service_time": 509,
+  "time_window_start": 19869.9,
+  "time_window_end": 24256.6
+ },
+ {
+  "customer_id": "c047",
+  "lat": 13.148151,
+  "lon": 80.2152563,
+  "node_id": 540673100,
+  "demand": 6,
+  "service_time": 476,
+  "time_window_start": 11236.9,
+  "time_window_end": 15959.0
+ },
+ {
+  "customer_id": "c048",
+  "lat": 12.9265178,
+  "lon": 80.1963883,
+  "node_id": 2186792231,
+  "demand": 8,
+  "service_time": 379,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c049",
+  "lat": 13.1579902,
+  "lon": 80.3018397,
+  "node_id": 281998089,
+  "demand": 2,
+  "service_time": 432,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ }
+]
