@@ -86,6 +86,8 @@ class FleetState:
         travelled = rm.travelled_route(self.routes[v], int(self.position[v]))
         self.routes[v] = rm.splice(travelled, optimized)
         self.last_reopt[v] = float(t_sim)
+
+
 """state: phase 0 placeholder. Contract defined in a later phase."""
 
 # Phase 0-6: intentionally empty. Body + tests land with the phase that owns it.
