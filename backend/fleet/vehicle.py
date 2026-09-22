@@ -6,12 +6,13 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
+# Lifecycle a vehicle moves through during a simulated shift (driven by later phases).
 Status = Literal["idle", "en_route", "servicing", "returning", "done"]
 
 
-@dataclass
+@dataclass  # NOT frozen: status / position / route are updated as the sim advances
 class Vehicle:
-    vehicle_id: str
+    vehicle_id: str  # "v000", "v001", ...
     capacity: int  # Q_v
     current_node: int  # OSM node id; depot at scenario start
     shift_end: float  # H_v, sim-clock s
@@ -19,6 +20,7 @@ class Vehicle:
     assigned_customers: list[str] = field(default_factory=list)
     remaining_route: list[str] = field(default_factory=list)  # customer ids, in order
 
+    # JSON round-trip helpers; `field(default_factory=list)` keeps lists per-instance.
     def to_dict(self) -> dict:
         return asdict(self)
 

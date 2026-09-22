@@ -60,15 +60,17 @@ def snap_customer_nodes(
     lat = np.fromiter((d["y"] for _, d in graph.nodes(data=True)), float)
     lon = np.fromiter((d["x"] for _, d in graph.nodes(data=True)), float)
     out: dict[int, None] = {}  # ordered set
+    # Rejection loop: sample 2x the shortfall each round (snapping collapses nearby
+    # points onto the same node, so some duplicates are expected), keep the new ones.
     while len(out) < n:
         k = 2 * (n - len(out))
         pts = np.column_stack(
             [rng.uniform(lat.min(), lat.max(), k), rng.uniform(lon.min(), lon.max(), k)]
         )
         for node in snap_points_to_nodes(graph, [tuple(p) for p in pts]):
-            if node not in exclude:
+            if node not in exclude:  # skip depot (and duplicates via dict keys)
                 out[node] = None
-    return list(out)[:n]
+    return list(out)[:n]  # may overshoot on the last round; trim to exactly n
 
 
 def generate(
@@ -85,13 +87,16 @@ def generate(
     nodes = snap_customer_nodes(graph, n_customers, rng, {depot_node})
 
     H = config.shift_end_s
+    # `integers` upper bound is exclusive, hence +1 for an inclusive range.
     demand = rng.integers(config.demand_range[0], config.demand_range[1] + 1, n_customers)
     service = rng.integers(
         config.service_time_range[0], config.service_time_range[1] + 1, n_customers
     )
+    # Time windows: draw both variants for everyone, then select per customer with
+    # np.where so the random stream is consumed identically regardless of the mask.
     anytime = rng.random(n_customers) < config.tw_anytime_fraction
     width = rng.uniform(config.tw_width_range[0], config.tw_width_range[1], n_customers)
-    start = rng.random(n_customers) * (H - width)
+    start = rng.random(n_customers) * (H - width)  # keeps start + width <= H
     tw_start = np.where(anytime, 0.0, start)
     tw_end = np.where(anytime, H, start + width)
 
@@ -108,10 +113,11 @@ def generate(
         )
         for i, nd in enumerate(nodes)
     ]
+    # Homogeneous fleet: same capacity, all start at the depot, same shift end.
     vehicles = [
         Vehicle(f"v{k:03d}", config.vehicle_capacity, int(depot_node), H) for k in range(n_vehicles)
     ]
-    check_feasible(customers, vehicles, config.rho_max)
+    check_feasible(customers, vehicles, config.rho_max)  # refuse to ship an impossible instance
     return customers, vehicles, depot
 
 
@@ -122,8 +128,10 @@ def save(
     depot: dict,
     out_dir: Path = SCENARIO_DIR,
 ) -> Path:
+    """Write the three JSON files for scenario `name`; returns the directory."""
     d = Path(out_dir) / name
     d.mkdir(parents=True, exist_ok=True)
+    # indent=1 keeps the committed files diff-friendly (one field per line).
     (d / "customers.json").write_text(json.dumps([c.to_dict() for c in customers], indent=1))
     (d / "vehicles.json").write_text(json.dumps([v.to_dict() for v in vehicles], indent=1))
     (d / "depot.json").write_text(json.dumps(depot))
@@ -131,6 +139,7 @@ def save(
 
 
 def load(name: str, out_dir: Path = SCENARIO_DIR) -> tuple[list[Customer], list[Vehicle], dict]:
+    """Inverse of `save`: (customers, vehicles, depot) from data/scenarios/<name>/."""
     d = Path(out_dir) / name
     customers = [Customer.from_dict(x) for x in json.loads((d / "customers.json").read_text())]
     vehicles = [Vehicle.from_dict(x) for x in json.loads((d / "vehicles.json").read_text())]

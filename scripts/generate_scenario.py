@@ -24,10 +24,11 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     cfg = QTrafficConfig(city_bbox=tuple(a.bbox)) if a.bbox else QTrafficConfig()
-    graph = load_road_graph(cfg)
+    graph = load_road_graph(cfg)  # one graph load shared by every scenario size
     names = [a.only] if a.only else list(scenario.SIZES)
     for i, name in enumerate(names):
         n, m = scenario.SIZES[name]
+        # seed + i: each size gets its own reproducible stream; --seed shifts all of them
         customers, vehicles, depot = scenario.generate(
             graph, n, m, cfg, np.random.default_rng(a.seed + i)
         )

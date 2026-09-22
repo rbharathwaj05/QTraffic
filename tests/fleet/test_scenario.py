@@ -1,3 +1,7 @@
+"""Phase 3: generate() on the test bbox for S1/S2 — every customer on a graph node,
+distinct, not the depot, feasible under rho_max, windows inside the shift and not all
+'anytime'; JSON save/load round-trip; infeasible capacity raises. Skips offline."""
+
 import numpy as np
 import pytest
 

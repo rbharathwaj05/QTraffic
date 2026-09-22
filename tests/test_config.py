@@ -1,3 +1,6 @@
+"""Phase 0: QTrafficConfig defaults validate; each sum-to-one group, spec range and
+ordering rule rejects a bad value with ValueError."""
+
 import pytest
 
 from backend.config import QTrafficConfig

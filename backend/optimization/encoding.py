@@ -39,9 +39,9 @@ def dim(n_customers: int) -> int:
 
 def split(X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """(Y, Z) views of a (M, 2N) swarm: Y = X[:, :N], Z = X[:, N:] [SPEC v4 6]."""
-    X = np.atleast_2d(X)
+    X = np.atleast_2d(X)  # accept a single (2N,) particle too
     n = X.shape[1] // 2
-    return X[:, :n], X[:, n:]
+    return X[:, :n], X[:, n:]  # views, not copies: no memory traffic
 
 
 def assign(Y: np.ndarray, n_vehicles: int) -> np.ndarray:
@@ -52,11 +52,13 @@ def assign(Y: np.ndarray, n_vehicles: int) -> np.ndarray:
     Example: y_j = 0.62, M_veh = 20 -> floor(12.4) = 12 here, spec's a_j = 13.
     Shape (M, N) int64 in, same shape out; y = 1.0 maps to the last vehicle.
     """
+    # floor(M_veh * y) splits [0, 1) into M_veh equal bins; the min() catches y == 1.0.
     return np.minimum(n_vehicles - 1, np.floor(n_vehicles * Y)).astype(np.int64)
 
 
 def to_binary_assignment(a: np.ndarray, n_vehicles: int) -> np.ndarray:
     """x_jv = 1 if a_j == v else 0 [SPEC v4 9]. (N,) -> (M_veh, N); (M, N) -> (M, M_veh, N)."""
+    # Broadcast compare: insert a vehicle axis before the customer axis, one-hot by ==.
     return (a[..., None, :] == np.arange(n_vehicles)[:, None]).astype(np.int8)
 
 
@@ -72,9 +74,14 @@ def decode_dense(X: np.ndarray, n_vehicles: int) -> tuple[np.ndarray, np.ndarray
     Y, Z = split(X)
     M, N = Y.shape
     a = assign(Y, n_vehicles)
+    # lexsort sorts by the LAST key first: customers grouped by vehicle, then by z inside
+    # each group. One call handles all M particles (axis=1).
     order = np.lexsort((Z, a), axis=1)  # primary key a, secondary z  [SPEC v4 8]
+    # Count customers per (particle, vehicle): offset vehicle ids by particle so a single
+    # flat bincount covers the whole swarm.
     flat = a + n_vehicles * np.arange(M)[:, None]
     counts = np.bincount(flat.ravel(), minlength=M * n_vehicles).reshape(M, n_vehicles)
+    # Prefix sums turn counts into segment boundaries into `order`.
     ptr = np.zeros((M, n_vehicles + 1), dtype=np.int64)
     np.cumsum(counts, axis=1, out=ptr[:, 1:])
     return a, order, ptr
@@ -113,7 +120,9 @@ def encode(
     for v, r in enumerate(fleet.routes):
         j = np.asarray(r[1:-1]) - 1  # strip depot ends, back to 0..N-1
         k = len(j)
+        # Assignment key inside vehicle v's bin [v/M_veh, (v+1)/M_veh).
         x[j] = (v + rng.random(k)) / n_vehicles
+        # Ordering key: rank + jitter, so sorting z within v reproduces the route order.
         x[n_customers + j] = (np.arange(k) + rng.random(k)) / max(k, 1)
     return x
 
