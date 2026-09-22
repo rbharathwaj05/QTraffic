@@ -29,7 +29,7 @@ class QTrafficConfig:
     # --- objective weights (spec: fitness function), must sum to 1 -----------------
     w_t: float = 0.40  # total travel time
     w_d: float = 0.20  # total distance
-    w_c: float = 0.30  # constraint-violation penalty
+    w_c: float = 0.30  # congestion-weighted distance C = sum rho_ij D_ij [v4 17]
     w_r: float = 0.10  # route-change penalty vs. incumbent plan
 
     # --- route-change split (spec: route-change penalty), must sum to 1 ------------
@@ -38,7 +38,7 @@ class QTrafficConfig:
 
     # --- repair (spec: constraint repair) ------------------------------------------
     MAX_REPAIR_ITERATIONS: int = 8
-    w_p: float = 0.5  # penalty weight applied to residual violations after repair
+    w_p: float = 0.5  # F_eval = F + w_p P, P = residual violation after repair [v4 22]
 
     # --- hysteresis (spec: re-plan controller) -------------------------------------
     theta_soft: float = 0.10  # relative cost delta that arms a re-plan
