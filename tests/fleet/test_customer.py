@@ -1,8 +1,7 @@
-import pytest
-
-import backend.fleet.customer as mod  # import must succeed even while bodies are stubs
+from backend.fleet.customer import Customer
 
 
-@pytest.mark.skip(reason="phase 0 stub: no behaviour to test yet")
-def test_customer():
-    assert mod
+def test_customer_roundtrip():
+    c = Customer("c000", 13.0, 80.0, 42, 5, 300, 3600.0, 7200.0)
+    assert Customer.from_dict(c.to_dict()) == c
+    assert c.to_dict()["node_id"] == 42

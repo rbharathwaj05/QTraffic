@@ -1,0 +1,102 @@
+[
+ {
+  "customer_id": "c000",
+  "lat": 13.0946927,
+  "lon": 80.1458242,
+  "node_id": 347655098,
+  "demand": 7,
+  "service_time": 277,
+  "time_window_start": 15611.6,
+  "time_window_end": 19596.2
+ },
+ {
+  "customer_id": "c001",
+  "lat": 12.9684664,
+  "lon": 80.181966,
+  "node_id": 11625869955,
+  "demand": 6,
+  "service_time": 548,
+  "time_window_start": 24039.3,
+  "time_window_end": 26911.3
+ },
+ {
+  "customer_id": "c002",
+  "lat": 12.869417,
+  "lon": 80.2504753,
+  "node_id": 7768606762,
+  "demand": 3,
+  "service_time": 246,
+  "time_window_start": 11674.4,
+  "time_window_end": 13964.4
+ },
+ {
+  "customer_id": "c003",
+  "lat": 12.8631082,
+  "lon": 80.2495842,
+  "node_id": 7768606804,
+  "demand": 4,
+  "service_time": 229,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c004",
+  "lat": 13.1612774,
+  "lon": 80.2575037,
+  "node_id": 7819349816,
+  "demand": 8,
+  "service_time": 463,
+  "time_window_start": 12690.9,
+  "time_window_end": 16103.8
+ },
+ {
+  "customer_id": "c005",
+  "lat": 13.194937,
+  "lon": 80.2298713,
+  "node_id": 3905305412,
+  "demand": 6,
+  "service_time": 419,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ },
+ {
+  "customer_id": "c006",
+  "lat": 13.0951309,
+  "lon": 80.292574,
+  "node_id": 393768355,
+  "demand": 6,
+  "service_time": 143,
+  "time_window_start": 16077.6,
+  "time_window_end": 18954.9
+ },
+ {
+  "customer_id": "c007",
+  "lat": 13.1354057,
+  "lon": 80.2979375,
+  "node_id": 11056126141,
+  "demand": 4,
+  "service_time": 160,
+  "time_window_start": 21805.1,
+  "time_window_end": 28692.6
+ },
+ {
+  "customer_id": "c008",
+  "lat": 13.0594642,
+  "lon": 80.2708273,
+  "node_id": 2218064775,
+  "demand": 8,
+  "service_time": 301,
+  "time_window_start": 23750.5,
+  "time_window_end": 27522.1
+ },
+ {
+  "customer_id": "c009",
+  "lat": 13.2064889,
+  "lon": 80.2705398,
+  "node_id": 11832708106,
+  "demand": 4,
+  "service_time": 520,
+  "time_window_start": 0.0,
+  "time_window_end": 28800.0
+ }
+]

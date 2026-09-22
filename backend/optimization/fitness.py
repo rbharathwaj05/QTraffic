@@ -1,4 +1,14 @@
-"""Weighted multi-objective fitness. Lower is better."""
+"""Canonical four-term objective F, minimised by every optimiser [SPEC 7.2, v4 17].
+
+    F = w_t T' + w_d D' + w_c C' + w_r R'      with X' = (X - X_min) / (X_max - X_min)
+    F_eval = F + w_p P                          (P: residual violation from repair, v4 22)
+
+Raw terms are pure array gathers into the Phase 2 matrices (no path is ever recomputed
+here) and are vectorised across the WHOLE swarm: one fancy-index per matrix.
+Runtime / wall-clock is NEVER part of F; it is logged on a separate axis.
+
+`evaluate` is the single public entry point; no optimiser module defines its own F.
+"""
 
 from __future__ import annotations
 
@@ -7,54 +17,190 @@ from dataclasses import dataclass
 import numpy as np
 
 from backend.config import QTrafficConfig
+from backend.optimization.encoding import FleetRoute, decode_dense, random_particle
+from backend.road.cost_matrix import CostMatrix, effective_duration
+
+Dense = tuple[np.ndarray, np.ndarray, np.ndarray]  # (assignment, order, ptr) of decode_dense
+
+
+@dataclass(frozen=True)
+class TrafficState:
+    """Matrices at one traffic_version: T_path(t), D_path, rho(t) (path-level congestion
+    factor). Index 0 = depot, 1..N = customers."""
+
+    duration: np.ndarray  # (N+1, N+1) effective travel time, s
+    distance: np.ndarray  # (N+1, N+1) m
+    congestion: np.ndarray  # (N+1, N+1) rho_ij(t), 1.0 = free flow
+
+    @classmethod
+    def from_cost_matrix(cls, m: CostMatrix) -> TrafficState:
+        return cls(effective_duration(m), m.distance_m, m.factor)
+
+
+@dataclass(frozen=True)
+class Bounds:
+    """Per-scenario normalisation bounds, computed ONCE by `compute_normalization_bounds`
+    and frozen [SPEC 7.2]. Never recompute inside an optimisation loop."""
+
+    t: tuple[float, float]
+    d: tuple[float, float]
+    c: tuple[float, float]
+    r: tuple[float, float] = (0.0, 1.0)  # R' in [0, 1] by construction [v4 19]
 
 
 @dataclass
 class ProblemContext:
-    """Static-per-call inputs the fitness needs. Built once per optimisation call."""
+    """Everything an optimiser needs to call `evaluate` for one scenario."""
 
-    duration: np.ndarray  # (n, n) effective travel time, index 0 = depot
-    distance: np.ndarray  # (n, n) metres
-    demand: np.ndarray  # (N+1,), demand[0] = 0
-    capacity: np.ndarray  # (K,)
-    service_time: np.ndarray  # (N+1,) seconds
-    windows: np.ndarray  # (N+1, 2) [e, l] seconds of sim time
-    t_start: np.ndarray  # (K,) vehicle availability time
-    incumbent: list[np.ndarray] | None  # previous plan for route-change penalty
-    norm: dict[str, float]  # normalisers for each term, see `normalisers`
+    traffic: TrafficState
+    bounds: Bounds
+    n_customers: int
+    n_vehicles: int
+    current: FleetRoute | None = None  # deployed plan for R' (None -> R' = 0)
 
 
-def total_time(routes: list[np.ndarray], duration: np.ndarray, service_time: np.ndarray) -> float:
-    """T = sum_k sum_{(i,j) in route_k} c_ij + sum_i s_i (spec: fitness, time term)."""
-    raise NotImplementedError
+# -- route set -> flat visit sequences ------------------------------------------------
+def to_dense(fleets: list[FleetRoute]) -> Dense:
+    """Inverse of `encoding.decode` on route lists (used when repair hands back
+    FleetRoutes). Loops over (particle, vehicle) only."""
+    M, V = len(fleets), len(fleets[0].routes)
+    N = fleets[0].assignment.shape[0]
+    a = np.stack([f.assignment for f in fleets])
+    order = np.empty((M, N), dtype=np.int64)
+    ptr = np.zeros((M, V + 1), dtype=np.int64)
+    for m, f in enumerate(fleets):
+        segs = [r[1:-1] - 1 for r in f.routes]
+        ptr[m, 1:] = np.cumsum([len(s) for s in segs])
+        order[m] = np.concatenate(segs)
+    return a, order, ptr
 
 
-def total_distance(routes: list[np.ndarray], distance: np.ndarray) -> float:
-    """D = sum_k sum_{(i,j) in route_k} d_ij (spec: fitness, distance term)."""
-    raise NotImplementedError
+def visit_sequence(plans: Dense) -> np.ndarray:
+    """(M, N + 2V) matrix-index sequence per particle: [0, pi_0, 0, 0, pi_1, 0, ...].
+    Consecutive pairs are exactly the traversed (i, j); the (0, 0) joins between
+    vehicles and inside empty vehicles cost 0 (zero diagonal). Pure array scatter."""
+    a, order, ptr = plans
+    M, N = order.shape
+    V = ptr.shape[1] - 1
+    seq = np.zeros((M, N + 2 * V), dtype=np.int64)
+    a_sorted = np.take_along_axis(a, order, axis=1)  # vehicle of k-th visit
+    pos = np.arange(N) + 2 * a_sorted + 1  # each vehicle block adds 2 depot slots
+    np.put_along_axis(seq, pos, order + 1, axis=1)
+    return seq
 
 
-def route_change(
-    new: list[np.ndarray], old: list[np.ndarray], n_customers: int, eta_a: float, eta_o: float
-) -> float:
-    """R = eta_a * (#customers whose vehicle changed / N)
-         + eta_o * (#adjacent pairs in `old` not preserved in `new` / N)
-    (spec: route-change penalty, assignment vs ordering split)."""
-    raise NotImplementedError
+def raw_terms(plans: Dense, traffic: TrafficState) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(T, D, C) per particle [SPEC 7.2, v4 5]:
+        T = sum T_path_ij(t),  D = sum D_path_ij,  C = sum rho_ij(t) * D_ij
+    over consecutive (i, j) of every route, one gather per matrix for the whole swarm."""
+    seq = visit_sequence(plans)
+    i, j = seq[:, :-1], seq[:, 1:]
+    d = traffic.distance[i, j]
+    return traffic.duration[i, j].sum(1), d.sum(1), (traffic.congestion[i, j] * d).sum(1)
 
 
-def normalisers(ctx: ProblemContext) -> dict[str, float]:
-    """Scale factors so each term is O(1): T_ref, D_ref from a nearest-neighbour
-    construction, V_ref = total demand (spec: fitness normalisation)."""
-    raise NotImplementedError
+# -- route change ------------------------------------------------------------------
+def plan_positions(plans: Dense) -> tuple[np.ndarray, np.ndarray]:
+    """(pos, length): pos[m, j] = index of customer j inside its vehicle's route,
+    length[m, j] = number of customers on that route."""
+    a, order, ptr = plans
+    M, N = order.shape
+    a_sorted = np.take_along_axis(a, order, axis=1)
+    start = np.take_along_axis(ptr, a_sorted, axis=1)
+    pos = np.empty_like(order)
+    np.put_along_axis(pos, order, np.arange(N) - start, axis=1)
+    length = np.take_along_axis(np.diff(ptr, axis=1), a, axis=1)
+    return pos, length
 
 
-def fitness(x: np.ndarray, ctx: ProblemContext, cfg: QTrafficConfig) -> float:
-    """F(x) = w_t T/T_ref + w_d D/D_ref + w_c V/V_ref + w_r R, after decode -> repair
-    (spec: fitness function). V is the residual violation after repair."""
-    raise NotImplementedError
+def route_change(plans: Dense, current: Dense, eta_a: float, eta_o: float) -> np.ndarray:
+    """R' per particle vs the deployed plan [SPEC v4 19]:
+        A = (1/N) sum_j 1[a_j != a_j^cur]
+        O = (1/N) sum_j 1[a_j == a_j^cur] |pos_j - pos_j^cur| / L_j,
+            L_j = max(len_new(a_j), len_cur(a_j), 1)
+        R' = eta_a A + eta_o O
+    `current` is a single-particle Dense (M=1) and broadcasts over the swarm."""
+    a, _, _ = plans
+    a_cur, _, ptr_cur = current
+    pos, length = plan_positions(plans)
+    pos_cur, _ = plan_positions(current)
+    len_cur_new_vehicle = np.take_along_axis(np.diff(ptr_cur, axis=1), a, axis=1)
+    L = np.maximum(np.maximum(length, len_cur_new_vehicle), 1)
+    same = a == a_cur
+    A_chg = (~same).mean(axis=1)
+    O_chg = (same * np.abs(pos - pos_cur) / L).mean(axis=1)
+    return eta_a * A_chg + eta_o * O_chg
 
 
-def fitness_batch(X: np.ndarray, ctx: ProblemContext, cfg: QTrafficConfig) -> np.ndarray:
-    """Vectorised `fitness` over swarm matrix X of shape (M, D) (spec: performance)."""
-    raise NotImplementedError
+# -- normalisation + combination -------------------------------------------------------
+def compute_normalization_bounds(
+    traffic: TrafficState,
+    n_customers: int,
+    n_vehicles: int,
+    rng: np.random.Generator,
+    n_samples: int = 200,
+) -> Bounds:
+    """Min/max of T, D, C over `n_samples` random particles [SPEC 7.2]. Called ONCE per
+    scenario at setup; the result is frozen and passed into `evaluate`."""
+    plans = decode_dense(random_particle(n_customers, rng, n_samples), n_vehicles)
+    T, D, C = raw_terms(plans, traffic)
+    return Bounds(
+        t=(float(T.min()), float(T.max())),
+        d=(float(D.min()), float(D.max())),
+        c=(float(C.min()), float(C.max())),
+    )
+
+
+def _norm(x: np.ndarray, lo_hi: tuple[float, float]) -> np.ndarray:
+    lo, hi = lo_hi
+    return (x - lo) / ((hi - lo) or 1.0)
+
+
+def combine(
+    T: np.ndarray,
+    D: np.ndarray,
+    C: np.ndarray,
+    R: np.ndarray,
+    bounds: Bounds,
+    cfg: QTrafficConfig,
+    penalty: np.ndarray | float = 0.0,
+) -> np.ndarray:
+    """F = w_t T' + w_d D' + w_c C' + w_r R' (+ w_p P) [SPEC 7.2, v4 17, v4 22].
+    Normalised terms may exceed [0, 1] for solutions outside the sampled bounds; that
+    is intended (the bounds are a scale, not a clamp)."""
+    F = (
+        cfg.w_t * _norm(T, bounds.t)
+        + cfg.w_d * _norm(D, bounds.d)
+        + cfg.w_c * _norm(C, bounds.c)
+        + cfg.w_r * _norm(R, bounds.r)
+    )
+    return F + cfg.w_p * penalty
+
+
+def evaluate(
+    plans: Dense | list[FleetRoute],
+    traffic: TrafficState,
+    current: FleetRoute | Dense | None,
+    bounds: Bounds,
+    cfg: QTrafficConfig,
+    penalties: np.ndarray | None = None,
+) -> np.ndarray:
+    """One F per particle, vectorised over the batch [SPEC 7.2, v4 17].
+
+    plans:     `decode_dense` output (preferred, zero copies) or a list of FleetRoute.
+    current:   deployed plan for R'; None -> R' = 0 (cold start).
+    bounds:    frozen per-scenario `Bounds` -- a pure input, never read from a global.
+    penalties: optional (M,) residual violation P per particle -> F + w_p P [v4 22].
+    Deterministic: same inputs -> bit-identical output. Never mutates any input.
+    """
+    if isinstance(plans, list):
+        plans = to_dense(plans)
+    T, D, C = raw_terms(plans, traffic)
+    if current is None:
+        R = np.zeros_like(T)
+    else:
+        if isinstance(current, FleetRoute):
+            current = to_dense([current])
+        R = route_change(plans, current, cfg.eta_a, cfg.eta_o)
+    P = 0.0 if penalties is None else np.asarray(penalties, dtype=float)
+    return combine(T, D, C, R, bounds, cfg, P)
