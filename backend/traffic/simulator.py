@@ -84,7 +84,9 @@ class TrafficSimulator:
         background = congestion.background_factors(
             self.t, self.base_volume, self.capacity, self.cfg, fleet_flow
         )
-        new_factor = congestion.compose_factors(background, self.active, self.n_edges)
+        new_factor = congestion.compose_factors(
+            background, self.active, self.n_edges, self.cfg.rho_congestion_max
+        )
         moved = np.flatnonzero(~np.isclose(new_factor, self.factor, equal_nan=True))
         self.factor = new_factor
         if moved.size == 0:
@@ -92,7 +94,9 @@ class TrafficSimulator:
 
         self._arm_batch(moved, started, expired)
         # [SPEC 10.2] scoped update: only the pairs whose cached path uses a changed edge
-        return update_factors_for_edges(self.matrix, self.factor, self.index, moved)
+        return update_factors_for_edges(
+            self.matrix, self.factor, self.index, moved, self.cfg.scoped_update_max_fraction
+        )
 
     # -- 9.8 debounce / batching [SPEC 9.5] -------------------------------------------
     def _arm_batch(self, moved: np.ndarray, started: list, expired: list) -> None:

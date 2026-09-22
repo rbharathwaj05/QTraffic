@@ -2,7 +2,7 @@
 
 Core model [SPEC 7.2 / v4 3], all per edge e and sim time t:
 
-    rho_e(t) in [0, rho_congestion_max),  rho_congestion_max = 0.95
+    rho_e(t) in [0, rho_congestion_max)          <- cfg.rho_congestion_max, read live
     V_e(t)   = V_normal_e * (1 - rho_e(t))
     T_e(t)   = D_e / V_e(t) = T_e^0 / (1 - rho_e(t))
 
@@ -27,9 +27,11 @@ DAY_S = 86400.0
 
 
 # -- core model [SPEC 7.2 / v4 3] --------------------------------------------------
-def speed(v_normal: np.ndarray, rho: np.ndarray, rho_max: float = 0.95) -> np.ndarray:
-    """V_ij(t) = V_normal_ij * (1 - rho_ij(t)), rho clipped to [0, rho_max) [SPEC 7.2]."""
-    return np.asarray(v_normal, float) * (1.0 - clip_rho(rho, rho_max))
+def speed(v_normal: np.ndarray, rho: np.ndarray, rho_congestion_max: float) -> np.ndarray:
+    """V_ij(t) = V_normal_ij * (1 - rho_ij(t)), rho clipped to [0, rho_congestion_max)
+    [SPEC 7.2]. The cap is `cfg.rho_congestion_max` and has NO default here: a silent
+    hard-coded ceiling is what let the configured one go unread in the first place."""
+    return np.asarray(v_normal, float) * (1.0 - clip_rho(rho, rho_congestion_max))
 
 
 def travel_time(distance: np.ndarray, v: np.ndarray) -> np.ndarray:
@@ -38,16 +40,23 @@ def travel_time(distance: np.ndarray, v: np.ndarray) -> np.ndarray:
     return np.where(v > 0, np.asarray(distance, float) / np.where(v > 0, v, 1.0), np.inf)
 
 
-def clip_rho(rho: np.ndarray, rho_max: float = 0.95) -> np.ndarray:
-    """rho in [0, rho_max) [SPEC 7.2]. The upper end is open, so the cap is applied just
-    below rho_max -- at exactly rho_max the speed model would still be finite, but the
-    spec writes the interval half-open and every downstream 1/(1-rho) assumes it."""
-    return np.clip(np.asarray(rho, float), 0.0, np.nextafter(rho_max, 0.0))
+def clip_rho(rho: np.ndarray, rho_congestion_max: float) -> np.ndarray:
+    """rho in [0, rho_congestion_max) [SPEC 7.2] -- THE one clamp in the system.
+
+    The upper end is open, so the cap is applied just below the ceiling: at exactly
+    rho_congestion_max the speed model is still finite, but the spec writes the interval
+    half-open and every downstream 1/(1-rho) assumes it. `rho_congestion_max` is
+    `cfg.rho_congestion_max`, never the vehicle-LOAD ratio `cfg.rho_max` -- the two are
+    unrelated quantities that happen to share a letter, so they never share a name.
+
+    Every other clamp in `traffic/` calls this function; none of them re-derives it.
+    """
+    return np.clip(np.asarray(rho, float), 0.0, np.nextafter(rho_congestion_max, 0.0))
 
 
-def rho_to_factor(rho: np.ndarray, rho_max: float = 0.95) -> np.ndarray:
-    """f_e = T_e(t)/T_e^0 = 1 / (1 - rho_e(t)) [SPEC 7.2]."""
-    return 1.0 / (1.0 - clip_rho(rho, rho_max))
+def rho_to_factor(rho: np.ndarray, rho_congestion_max: float) -> np.ndarray:
+    """f_e = T_e(t)/T_e^0 = 1 / (1 - rho_e(t)), rho capped first [SPEC 7.2]."""
+    return 1.0 / (1.0 - clip_rho(rho, rho_congestion_max))
 
 
 def factor_to_rho(factor: np.ndarray) -> np.ndarray:
@@ -78,29 +87,42 @@ def diurnal_volume(t_sim: float, base_volume: np.ndarray) -> np.ndarray:
     return np.asarray(base_volume, float) * (0.5 + peaks)
 
 
-def fleet_rho(flow: np.ndarray, capacity: np.ndarray, rho_max: float = 0.95) -> np.ndarray:
+def fleet_rho(flow: np.ndarray, capacity: np.ndarray, rho_congestion_max: float) -> np.ndarray:
     """rho_e = flow_e / capacity_e from the fleet's own vehicles (doc2 9, NOT core spec).
 
     Isolated on purpose: nothing in the degradation/hysteresis path calls this, so
     `cfg.enable_fleet_congestion = False` removes the feature completely.
     """
     c = np.asarray(capacity, float)
-    return clip_rho(np.asarray(flow, float) / np.where(c > 0, c, np.inf), rho_max)
+    return clip_rho(np.asarray(flow, float) / np.where(c > 0, c, np.inf), rho_congestion_max)
 
 
 # -- composition ---------------------------------------------------------------------
 def compose_factors(
-    background: np.ndarray, active_events: list[TrafficEvent], n_edges: int
+    background: np.ndarray,
+    active_events: list[TrafficEvent],
+    n_edges: int,
+    rho_congestion_max: float,
 ) -> np.ndarray:
-    """f_e = background_e * prod_{events on e} severity_to_factor(...) (spec: factor
-    composition). Events on the same edge multiply, so two 50 % slowdowns are worse than
-    one; a closure (inf) dominates everything."""
+    """f_e = background_e * prod_{events on e} severity_to_factor(...), then capped
+    (spec: factor composition; cap per [SPEC 7.2]).
+
+    Events on the same edge multiply, so two 50 % slowdowns are worse than one. The
+    PRODUCT is then pushed back through the cap: stacking events must not walk the
+    implied rho past `rho_congestion_max` any more than a single event may. Without this
+    the composition was the second way round the ceiling, after `severity_to_factor`.
+
+    A closure (inf) is the ONE deliberate exception: it means "no path", not a congestion
+    level, so it is not a rho the cap applies to and it survives composition untouched.
+    """
     f = np.ones(n_edges) if background is None else np.array(background, float)
     if f.shape != (n_edges,):
         raise ValueError(f"background must be ({n_edges},), got {f.shape}")
     for ev in active_events:
         e = np.asarray(ev.edge_ids, dtype=np.int64)
-        f[e] = f[e] * severity_to_factor(ev.severity, ev.kind)
+        f[e] = f[e] * severity_to_factor(ev.severity, ev.kind, rho_congestion_max)
+    finite = np.isfinite(f)  # inf = closure, exempt by definition
+    f[finite] = np.maximum(1.0, rho_to_factor(factor_to_rho(f[finite]), rho_congestion_max))
     return f
 
 

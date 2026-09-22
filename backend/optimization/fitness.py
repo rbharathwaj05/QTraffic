@@ -47,6 +47,28 @@ class Bounds:
     c: tuple[float, float]
     r: tuple[float, float] = (0.0, 1.0)  # R' in [0, 1] by construction [v4 19]
 
+    def for_remaining(self) -> Bounds:
+        """The same frozen SCALES, re-based at zero, for costing a REMAINING route.
+
+        `compute_normalization_bounds` samples whole-fleet plans, so its `lo` is the
+        cheapest FULL plan seen -- a floor that a partly-driven route (or a single
+        vehicle's share of one) sits far below, which would drive F negative. The true
+        lower bound of a remaining-route cost is 0: a vehicle with nothing left to do
+        costs nothing. Re-basing at 0 keeps the per-scenario spread as the scale and makes
+        the min-max form (x - 0)/(hi - 0) coincide with the ratio form x/X_ref that
+        CLAUDE.md rule 5 writes -- so the degradation check in `traffic.controller` can
+        call `combine` like everything else instead of carrying a second definition of F.
+
+        Frozen like its parent: derived once from bounds that were computed once
+        [SPEC 7.2], never recomputed mid-run.
+        """
+        return Bounds(
+            t=(0.0, (self.t[1] - self.t[0]) or 1.0),
+            d=(0.0, (self.d[1] - self.d[0]) or 1.0),
+            c=(0.0, (self.c[1] - self.c[0]) or 1.0),
+            r=self.r,
+        )
+
 
 @dataclass
 class ProblemContext:

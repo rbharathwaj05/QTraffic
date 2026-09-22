@@ -151,11 +151,26 @@ def update_factors(matrix: CostMatrix, edge_factor: np.ndarray, index: PathIndex
     return changed
 
 
+def _update_factors_full(
+    matrix: CostMatrix, edge_factor: np.ndarray, index: PathIndex
+) -> np.ndarray:
+    """Dense branch of `update_factors_for_edges`: one vectorised `inflate_all` pass over
+    every pair. Identical arithmetic to the scoped branch, different traversal."""
+    new = inflate_all(index, matrix.edge_t0, np.asarray(edge_factor, float))
+    changed = np.argwhere(~np.isclose(new, matrix.factor))
+    if not len(changed):
+        return np.empty((0, 2), dtype=np.int64)
+    matrix.factor = new
+    matrix.version.bump()
+    return changed
+
+
 def update_factors_for_edges(
     matrix: CostMatrix,
     edge_factor: np.ndarray,
     index: PathIndex,
     edge_ids: Any,
+    max_fraction: float = 0.5,
 ) -> np.ndarray:
     """Scoped counterpart of `update_factors` [SPEC 10.2 / v4 43]: recompute `factor` ONLY
     for the pairs that `PathIndex.invalidate_edge` says depend on the changed edges.
@@ -164,6 +179,14 @@ def update_factors_for_edges(
     touches |pairs_using(k)| pairs, typically a small slice of the N^2 matrix, so the full
     `inflate_all` rebuild is skipped entirely. Same return contract as `update_factors`
     (changed (i, j) as an int array, `traffic_version` bumped when anything moved).
+
+    ponytail: PERFORMANCE CROSSOVER, not a correctness switch. Scoping wins only while the
+    change is sparse. Background diurnal drift moves nearly every edge every step, and
+    there the per-pair path (a Python set union plus one `edges_on` lookup per pair) does
+    ~the same work as `inflate_all`'s single vectorised pass, slower. So once the touched
+    pairs exceed `max_fraction` of the matrix (`cfg.scoped_update_max_fraction`), fall back
+    to the full recompute. Both branches produce identical numbers -- the equivalence test
+    runs in both regimes.
     """
     if matrix.edge_t0 is None:
         raise ValueError("CostMatrix.edge_t0 required for inflation")
@@ -172,6 +195,9 @@ def update_factors_for_edges(
         pairs |= index.invalidate_edge(int(e))
     if not pairs:
         return np.empty((0, 2), dtype=np.int64)
+
+    if len(pairs) > max_fraction * index.n * index.n:
+        return _update_factors_full(matrix, edge_factor, index)
 
     ij = np.array(sorted(pairs), dtype=np.int64)
     lists = [index.edges_on(int(i), int(j)) for i, j in ij]

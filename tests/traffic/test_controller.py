@@ -2,9 +2,11 @@ import numpy as np
 import pytest
 
 from backend.config import QTrafficConfig
+from backend.fleet import route_manager as rm
 from backend.fleet.state import FleetState
 from backend.optimization.encoding import FleetRoute
-from backend.optimization.fitness import Bounds, TrafficState
+from backend.optimization.fitness import Bounds, TrafficState, combine
+from backend.road.path_index import PathIndex
 from backend.traffic import controller as mod
 from backend.traffic.controller import Decision, ReplanController, Scope
 from tests.traffic.helpers import COORDS, cost_matrix, path_index
@@ -237,3 +239,117 @@ def test_decision_carries_the_vehicles_it_covers():
     state = three_vehicle_state()
     d = ReplanController(QTrafficConfig()).decide(0.0, 0.20, [2, 0], 3, state)
     assert isinstance(d, Decision) and d.vehicles == (2, 0)
+
+
+# -- F3: Delta and the optimiser's F are ONE formula ---------------------------------------
+def test_remaining_cost_is_fitness_combine_on_remaining_rebased_bounds():
+    """No parallel objective lives in the controller: `remaining_cost` must equal a direct
+    `fitness.combine` call on `bounds.for_remaining()` with R' = 0."""
+    cfg = QTrafficConfig()
+    state, tr = three_vehicle_state(), traffic(1.0)
+    T = D = C = 0.0
+    for v in state.vehicles():
+        t, d, c = rm.route_cost_terms(
+            state.routes[v], int(state.position[v]), tr.duration, tr.distance, tr.congestion
+        )
+        T, D, C = T + t, D + d, C + c
+    direct = combine(
+        np.array([T]), np.array([D]), np.array([C]), np.zeros(1), BOUNDS.for_remaining(), cfg
+    )
+    assert mod.remaining_cost(state, state.vehicles(), tr, BOUNDS, cfg) == pytest.approx(
+        float(direct[0])
+    )
+
+
+def test_remaining_rebased_bounds_keep_the_scale_and_drop_only_the_offset():
+    """[CLAUDE.md rule 5] with lo = 0 the min-max form IS the ratio form w_t T/T_ref + ...,
+    which is why one definition of F now covers both the swarm and the degradation check."""
+    cfg = QTrafficConfig()
+    rb = BOUNDS.for_remaining()
+    assert rb.t[0] == rb.d[0] == rb.c[0] == 0.0  # re-based at zero
+    assert rb.t[1] == BOUNDS.t[1] - BOUNDS.t[0]  # same frozen spread
+    T, D, C = 300.0, 4000.0, 5000.0
+    ratio = cfg.w_t * T / rb.t[1] + cfg.w_d * D / rb.d[1] + cfg.w_c * C / rb.c[1]
+    viacombine = combine(np.array([T]), np.array([D]), np.array([C]), np.zeros(1), rb, cfg)
+    assert float(viacombine[0]) == pytest.approx(ratio)
+
+
+def test_remaining_cost_is_never_negative_under_the_rebased_bounds():
+    """The failure the rebasing fixes: a single vehicle's remaining legs sit far below a
+    fleet-scale `lo`, so the un-rebased form could drive F_before below zero and flip the
+    sign of Delta."""
+    cfg = QTrafficConfig()
+    state, tr = three_vehicle_state(), traffic(1.0)
+    for v in state.vehicles():
+        assert mod.remaining_cost(state, [v], tr, BOUNDS, cfg) >= 0.0
+    raw = combine(  # the old, un-rebased call, for contrast
+        np.array([30.0]), np.array([300.0]), np.array([300.0]), np.zeros(1), BOUNDS, cfg
+    )
+    assert float(raw[0]) < mod.remaining_cost(state, [0], tr, BOUNDS, cfg)
+
+
+# -- F5: an edge only in the TRAVELLED prefix must not make a vehicle affected -------------
+def test_a_vehicle_that_has_already_driven_the_edge_is_not_affected():
+    """[SPEC 9.3 point 1] the frozen prefix cannot be degraded, so it cannot trigger.
+    The other pinned tests happen to use vehicles that still drive the edge on the way
+    home; this one constructs the case where the edge is genuinely behind the vehicle."""
+    idx = PathIndex()
+    idx.n = 3
+    # edge 7 is used ONLY by the (0, 1) leg -- the first leg of the route below
+    paths = {(0, 1): [7], (1, 0): [7], (1, 2): [8], (2, 1): [8], (2, 0): [9], (0, 2): [9]}
+    for (i, j), e in paths.items():
+        idx.pair_to_edges[(i, j)] = np.array(e, dtype=np.int64)
+        for k in e:
+            idx.edge_to_pairs.setdefault(int(k), set()).add((i, j))
+    state = FleetState.from_fleet_route(FleetRoute([np.array([0, 1, 2, 0])], np.array([0, 0])))
+
+    assert mod.affected_vehicles(state, idx, [7]) == {0}  # still ahead of the vehicle
+    state.advance(0)  # drives 0 -> 1; edge 7 is now history
+    assert state.remaining_legs(0) == [(1, 2), (2, 0)]
+    assert mod.affected_vehicles(state, idx, [7]) == set()
+    assert mod.affected_vehicles(state, idx, [8]) == {0}  # the leg still ahead does trigger
+
+
+# -- F7: the other two ladder boundaries ---------------------------------------------------
+def test_exactly_theta_hard_takes_the_persistence_branch_not_the_hard_trigger():
+    """The ladder is `theta_soft < Delta <= theta_hard -> persistence` [SPEC 9.2], so the
+    boundary value must arm rather than fire."""
+    state = three_vehicle_state()
+    ctrl = ReplanController(QTrafficConfig())
+    first = ctrl.decide(0.0, QTrafficConfig().theta_hard, [0], 3, state)
+    assert first.scope is Scope.NONE and "armed 1/2" in first.reason
+    assert ctrl.decide(1.0, QTrafficConfig().theta_hard, [0], 3, state).scope is Scope.LOCAL
+
+
+def test_exactly_theta_override_is_a_hard_trigger_not_a_severe_override():
+    """`theta_hard < Delta <= theta_override -> hard trigger` [SPEC 9.2]: the boundary
+    belongs to the hard branch, so the cooldown still applies to it."""
+    cfg = QTrafficConfig()
+    state = three_vehicle_state()
+    d = ReplanController(cfg).decide(0.0, cfg.theta_override, [0], 3, state)
+    assert d.reason == "above theta_hard" and d.override is False
+
+    state.last_reopt[:] = 0.0  # now cooling: a true override would ignore this, a hard one holds
+    held = ReplanController(cfg).decide(1.0, cfg.theta_override, [0], 3, state)
+    assert held.scope is Scope.NONE and "cooldown" in held.reason
+
+
+# -- F4: the set-wide cooldown veto is deliberate, pinned as such ---------------------------
+def test_a_single_cooling_vehicle_holds_the_whole_decision_by_design():
+    """Deliberate reading of [v4 47]: the cooldown CLOCK is per vehicle, the GATE is
+    set-wide. A LOCAL re-plan re-optimises its set together, so firing for a subset while
+    one member is frozen is the churn `T_cool` exists to prevent. Pinned so this is not
+    re-flagged as an oversight; if the spec says otherwise, this test changes with it."""
+    cfg = QTrafficConfig()
+    state = three_vehicle_state()
+    state.last_reopt[:] = -np.inf
+    state.last_reopt[1] = 1000.0  # only vehicle 1 is cooling
+    ctrl = ReplanController(cfg)
+    assert ctrl.cooldown_ok(state, [0, 2], 1001.0)  # the others are individually clear
+    held = ctrl.decide(1001.0, 0.20, [0, 1], 3, state)
+    assert held.scope is Scope.NONE and held.reason == "hard trigger held by cooldown"
+    assert held.vehicles == (0, 1)  # the full set is reported, none of it fired
+    # and it fires for the whole set once the last member clears
+    fired = ctrl.decide(1000.0 + cfg.T_cool, 0.20, [0, 1], 3, state)
+    assert fired.scope is Scope.FLEET  # 2 of 3 vehicles is past local_scope_fraction
+    assert fired.vehicles == (0, 1)

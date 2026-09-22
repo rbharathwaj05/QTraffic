@@ -67,6 +67,9 @@ class QTrafficConfig:
     persistence_cycles: int = 2  # consecutive cycles above theta_soft to fire [v4 46]
     epsilon_F: float = 1e-9  # floor in Delta = (F_after - F_before) / max(F_before, eps)
     debounce_s: float = 2.0  # SIM seconds: events inside this window = one controller pass
+    # Performance crossover, not a correctness knob: above this share of the OD matrix the
+    # per-pair scoped update is slower than one vectorised full recompute [SPEC 10.2].
+    scoped_update_max_fraction: float = 0.5
     local_scope_fraction: float = 0.5  # affected/total above this -> FLEET not LOCAL
 
     # --- congestion (spec 7.2 / v4 3) ----------------------------------------------
@@ -167,6 +170,8 @@ class QTrafficConfig:
             raise ValueError("require 0 < rho_congestion_max < 1")
         if self.T_cool < 0 or self.debounce_s < 0 or self.persistence_cycles < 1:
             raise ValueError("require T_cool >= 0, debounce_s >= 0, persistence_cycles >= 1")
+        if not 0 <= self.scoped_update_max_fraction <= 1:
+            raise ValueError("require 0 <= scoped_update_max_fraction <= 1")
         if not 0 <= self.tw_anytime_fraction <= 1:
             raise ValueError("require 0 <= tw_anytime_fraction <= 1")
         if self.tw_width_range[1] > self.shift_end_s or self.tw_width_range[0] <= 0:

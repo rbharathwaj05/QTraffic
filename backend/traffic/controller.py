@@ -8,10 +8,13 @@ here because Phase 9.7 needs affected-SET granularity]:
 
     F_A_before = F(R_A_remaining, t-)        cost of the remaining plan, OLD matrices
     F_A_after  = F(R_A_remaining, t+)        SAME plan, NEW matrices
-    Delta_A    = (F_A_after - F_A_before) / max(F_A_before, epsilon_F)
+    Delta_A    = (F_A_after - F_A_before) / max(abs(F_A_before), epsilon_F)
 
 Same route both sides: this measures what the WORLD did, not what a re-plan could win.
-It is computed on the remaining (untravelled) suffix only [SPEC 9.3 point 1].
+It is computed on the remaining (untravelled) suffix only [SPEC 9.3 point 1], and F is
+`fitness.combine` -- the optimiser's own objective, on `Bounds.for_remaining()` (the
+frozen per-scenario scales re-based at zero, because an empty remaining route costs 0).
+There is exactly one definition of F in this system and this is not a second one.
 
 Hysteresis ladder [SPEC 9.2 / v4 45-47], thresholds straight from config:
 
@@ -36,7 +39,7 @@ import numpy as np
 from backend.config import QTrafficConfig
 from backend.fleet import route_manager as rm
 from backend.fleet.state import FleetState
-from backend.optimization.fitness import Bounds, TrafficState
+from backend.optimization.fitness import Bounds, TrafficState, combine
 from backend.road.path_index import PathIndex
 
 
@@ -65,14 +68,18 @@ def remaining_cost(
 ) -> float:
     """F over the REMAINING routes of `vehicles` under one traffic snapshot [v4 44].
 
-    Same weights and same frozen per-scenario scales as the optimiser, but the RATIO form
-    of the objective [CLAUDE.md rule 5: F = w_t T/T_ref + w_d D/D_ref + w_c C/C_ref], not
-    `fitness.combine`'s min-max form. The reason is specific to this function: Delta is a
-    RATIO, and the -lo offset in (x - lo)/(hi - lo) does not cancel in a ratio the way it
-    cancels in a difference. Worse, a single vehicle's remaining leg costs sit far below a
-    fleet-scale `lo`, so the offset can drive F_before negative and make Delta meaningless
-    exactly where Phase 9.7 needs it (per-vehicle). Scale without offset keeps Delta
-    scale-invariant and comparable between one vehicle and the whole fleet.
+    ONE definition of F: this calls `fitness.combine`, the same function the optimiser
+    minimises, with the same weights and the same frozen per-scenario scales. The only
+    difference is WHICH `Bounds` it is handed -- `bounds.for_remaining()`, the fleet
+    bounds re-based at zero.
+
+    That re-basing is the whole fix: `compute_normalization_bounds` samples whole-fleet
+    plans, so its `lo` is the cheapest full plan seen. A single vehicle's remaining legs
+    sit far below that floor, which drove F_before negative and made Delta -- a RATIO, in
+    which the -lo offset does not cancel the way it cancels in a difference -- meaningless
+    exactly where Phase 9.7 needs it. Re-based at zero, the min-max form coincides with
+    the ratio form of [CLAUDE.md rule 5], so Delta and the optimiser's F are the same
+    formula on the same scales.
 
     R' = 0 on both sides: the plan is compared with itself, only the world moved.
     """
@@ -86,17 +93,16 @@ def remaining_cost(
             traffic.congestion,
         )
         T, D, C = T + t, D + d, C + c
-    return (
-        cfg.w_t * T / _scale(bounds.t)
-        + cfg.w_d * D / _scale(bounds.d)
-        + cfg.w_c * C / _scale(bounds.c)
+    F = combine(
+        np.array([T]),
+        np.array([D]),
+        np.array([C]),
+        np.zeros(1),  # R' = 0: same plan on both sides of the comparison
+        bounds.for_remaining(),
+        cfg,
+        penalty=0.0,
     )
-
-
-def _scale(lo_hi: tuple[float, float]) -> float:
-    """X_ref: the frozen per-scenario spread, never recomputed mid-run [SPEC 7.2]."""
-    lo, hi = lo_hi
-    return (hi - lo) or 1.0
+    return float(F[0])
 
 
 def degradation(
@@ -107,10 +113,13 @@ def degradation(
     bounds: Bounds,
     cfg: QTrafficConfig,
 ) -> float:
-    """Delta_A = (F_A_after - F_A_before) / max(F_A_before, epsilon_F) [SPEC 9.2, v4 44].
+    """Delta_A = (F_A_after - F_A_before) / max(abs(F_A_before), epsilon_F) [SPEC 9.2,
+    v4 44].
 
     `epsilon_F` guards the division when the remaining plan is (nearly) free -- an empty
-    remaining route has F_before = 0 and no meaningful relative degradation.
+    remaining route has F_before = 0 and no meaningful relative degradation. `abs` is
+    belt-and-braces: on remaining-rebased bounds F is non-negative by construction, but
+    the floor must hold whatever `Bounds` a caller supplies.
     """
     vehicles = list(vehicles)
     f_before = remaining_cost(state, vehicles, before, bounds, cfg)
@@ -166,7 +175,13 @@ class ReplanController:
         return (cost_now - cost_planned) / max(abs(cost_planned), self.cfg.epsilon_F)
 
     def cooldown_ok(self, state: FleetState, vehicles: Iterable[int], t_sim: float) -> bool:
-        """True when EVERY vehicle in the set has served its `T_cool` [v4 47]. Sim time."""
+        """True when EVERY vehicle in the set has served its `T_cool` [v4 47]. Sim time.
+
+        DELIBERATE: the cooldown CLOCK is per vehicle, the GATE is set-wide. `all()` is not
+        an oversight -- see the note on `decide`. A reviewer flagged this as a possible
+        partial-firing gap; the answer is that it is intentional, and `test_controller.py`
+        pins it as such.
+        """
         return all(t_sim - float(state.last_reopt[int(v)]) >= self.cfg.T_cool for v in vehicles)
 
     def decide(
@@ -187,6 +202,24 @@ class ReplanController:
         Scope: LOCAL while the affected share is at or below `cfg.local_scope_fraction`,
         FLEET above it -- and always FLEET for the severe override, which is a fleet-wide
         disruption by definition.
+
+        COOLDOWN SEMANTICS (reading (a), deliberate): the cooldown clock is tracked per
+        vehicle, but the gating decision is set-wide -- one cooling vehicle holds the whole
+        decision, rather than the re-plan firing for the ready subset and leaving the
+        cooling one behind. Two reasons:
+
+          * A LOCAL re-plan re-optimises the affected set TOGETHER; its value comes from
+            moving customers between those vehicles. Firing for a subset while one member
+            is frozen either silently drops that vehicle's customers from the pool or
+            re-plans around a plan that is itself about to change -- churn, which is the
+            exact thing `T_cool` exists to prevent [v4 47].
+          * The held decision is not lost: `armed_cycles` and the caller's next cycle
+            re-evaluate it, so the set fires as soon as its last member is clear. The cost
+            of waiting is bounded by `T_cool`; the cost of churn is not.
+
+        If the project spec later states the gate itself is per vehicle, this becomes a
+        partition of `affected` into ready/cooling inside `decide` -- and every caller must
+        then stop assuming `decision.vehicles == affected`.
         """
         c = self.cfg
         affected = [int(v) for v in affected]

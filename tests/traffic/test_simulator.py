@@ -1,7 +1,15 @@
+import time
+
 import numpy as np
 
 from backend.config import QTrafficConfig
-from backend.road.cost_matrix import inflate_all
+from backend.road import path_index as path_index_module
+from backend.road.cost_matrix import (
+    CostMatrix,
+    TrafficVersion,
+    inflate_all,
+    update_factors_for_edges,
+)
 from backend.traffic import simulator as mod
 from backend.traffic.events import EventKind, TrafficEvent
 from tests.traffic.helpers import N_EDGES, cost_matrix, path_index
@@ -107,3 +115,101 @@ def test_snapshot_is_serialisable_and_reports_the_live_version():
     assert snap["active_event_ids"] == [1]
     assert snap["level"][0] == 3 and snap["t"] == 1.0  # blocked
     assert snap["traffic_version"] == m.version.value
+
+
+# -- F9: the scoped update has a performance crossover, not a correctness one -------------
+def dense_layer(n=14, n_edges=40, seed=0):
+    """A path index where every pair uses a handful of shared edges, so background drift
+    moves nearly every pair at once -- the regime that defeated the per-pair path."""
+    rng = np.random.default_rng(seed)
+    idx = path_index_module.PathIndex()
+    idx.n = n
+    for i in range(n):
+        for j in range(n):
+            e = np.empty(0, dtype=np.int64) if i == j else rng.choice(n_edges, 3, replace=False)
+            idx.pair_to_edges[(i, j)] = np.asarray(e, dtype=np.int64)
+            for k in np.asarray(e).ravel():
+                idx.edge_to_pairs.setdefault(int(k), set()).add((i, j))
+    dur = np.full((n, n), 100.0)
+    np.fill_diagonal(dur, 0.0)
+    m = CostMatrix(dur, dur.copy(), np.ones((n, n)), np.ones(n_edges), TrafficVersion("dense"))
+    return idx, m, n_edges
+
+
+def test_a_sparse_event_change_stays_on_the_per_pair_path():
+    """One event edge touches a handful of pairs: far below the crossover fraction."""
+    idx, m, n_edges = dense_layer()
+    factor = np.ones(n_edges)
+    factor[0] = 3.0
+    changed = update_factors_for_edges(m, factor, idx, [0], max_fraction=0.5)
+    assert 0 < len(changed) <= 0.5 * idx.n * idx.n
+
+
+def test_a_drift_dominated_change_trips_the_full_recompute_and_agrees_with_it():
+    """Both branches must produce identical numbers -- the fallback is a traversal change,
+    not an arithmetic one."""
+    idx, m, n_edges = dense_layer()
+    drift = np.linspace(1.1, 2.0, n_edges)  # every edge moved, as the diurnal curve does
+
+    scoped = CostMatrix(
+        m.duration_s.copy(),
+        m.distance_m.copy(),
+        np.ones_like(m.factor),
+        m.edge_t0.copy(),
+        TrafficVersion("scoped"),
+    )
+    dense = CostMatrix(
+        m.duration_s.copy(),
+        m.distance_m.copy(),
+        np.ones_like(m.factor),
+        m.edge_t0.copy(),
+        TrafficVersion("dense2"),
+    )
+    all_edges = list(range(n_edges))
+    forced_scoped = update_factors_for_edges(scoped, drift, idx, all_edges, max_fraction=1.0)
+    fell_back = update_factors_for_edges(dense, drift, idx, all_edges, max_fraction=0.5)
+
+    assert len(fell_back) > 0.5 * idx.n * idx.n  # the crossover really did engage
+    assert np.allclose(scoped.factor, dense.factor)  # identical arithmetic
+    assert np.allclose(dense.factor, inflate_all(idx, dense.edge_t0, drift))
+    assert len(forced_scoped) == len(fell_back)
+
+
+def test_the_fallback_is_not_slower_than_the_per_pair_path_it_replaces():
+    """Rough timing, not a tight perf assertion: it only has to show the crossover is
+    pointing the right way in the dense regime."""
+    idx, m, n_edges = dense_layer(n=26)
+    drift = np.linspace(1.1, 2.0, n_edges)
+    all_edges = list(range(n_edges))
+
+    def run(max_fraction):
+        mat = CostMatrix(
+            m.duration_s.copy(),
+            m.distance_m.copy(),
+            np.ones_like(m.factor),
+            m.edge_t0.copy(),
+            TrafficVersion("t"),
+        )
+        t = time.perf_counter()
+        update_factors_for_edges(mat, drift, idx, all_edges, max_fraction=max_fraction)
+        return time.perf_counter() - t
+
+    per_pair = min(run(1.0) for _ in range(3))  # crossover disabled
+    fallback = min(run(0.5) for _ in range(3))  # crossover engaged
+    print(
+        f"\nF9 dense regime: per-pair {per_pair * 1e3:.2f} ms, " f"fallback {fallback * 1e3:.2f} ms"
+    )
+    assert fallback <= per_pair * 1.5
+
+
+def test_a_drifting_simulator_step_still_produces_correct_factors():
+    """End-to-end: the regime that used to walk the slow path now takes the fallback and
+    still matches a full recompute."""
+    idx, m, n_edges = dense_layer()
+    cfg = QTrafficConfig()
+    sim = mod.TrafficSimulator(
+        n_edges, np.full(n_edges, 8.0), np.full(n_edges, 10.0), [], idx, m, cfg
+    )
+    sim.t = 6 * 3600.0
+    sim.step(600.0)
+    assert np.allclose(m.factor, inflate_all(idx, m.edge_t0, sim.factor))

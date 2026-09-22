@@ -45,7 +45,7 @@ from backend.traffic.controller import (
     affected_vehicles,
     degradation,
 )
-from backend.traffic.events import EventKind, TrafficEvent
+from backend.traffic.events import EventKind, TrafficEvent, severity_to_factor
 from backend.traffic.simulator import TrafficSimulator
 
 GRID = 12  # cells per axis in the offline fallback road layer
@@ -153,6 +153,9 @@ def main() -> None:
     changed = sim.step(1.0)  # activates the event and pushes the scoped update
     traffic_after = TrafficState.from_cost_matrix(matrix)
 
+    # print exactly what the simulator applied: ONE call, not a second look-alike one
+    applied_factor = severity_to_factor(a.severity, event.kind, cfg.rho_congestion_max)
+    implied_rho = float(congestion.factor_to_rho(np.array([applied_factor]))[0])
     affected = sorted(affected_vehicles(state, index, [edge]))
     delta_fleet = degradation(state, state.vehicles(), traffic_before, traffic_after, bounds, cfg)
     ctrl = ReplanController(cfg)
@@ -162,7 +165,8 @@ def main() -> None:
         f"scenario={a.scenario} N={n} M_veh={n_veh} road layer: {source}\n"
         f"clock: t = {sim.t:.0f}s sim (speed {clock.speed}x), T_cool = {cfg.T_cool:.0f}s\n"
         f"event: edge {edge}, severity {a.severity} -> factor "
-        f"{congestion.rho_to_factor(a.severity):.2f}x, active {event.duration_s:.0f}s sim\n"
+        f"{applied_factor:.2f}x (rho {implied_rho:.4f} <= cap {cfg.rho_congestion_max}), "
+        f"active {event.duration_s:.0f}s sim\n"
         f"cost matrix: {len(changed)} of {(n + 1) ** 2} OD pairs recomputed "
         f"({100 * len(changed) / (n + 1) ** 2:.1f}%), traffic_version "
         f"{version_before} -> {matrix.version.value}   [no full rebuild]\n"

@@ -62,3 +62,23 @@ def test_round_trip_back_to_a_fleet_route_is_a_copy():
     out = s.to_fleet_route()
     out.routes[0][1] = 99
     assert s.routes[0][1] == 1  # the state was not aliased into the report artifact
+
+
+# -- F8: the remaining/travelled views must not alias the live route ----------------------
+def test_remaining_does_not_alias_the_live_route():
+    """A view here let any caller's in-place edit silently rewrite the deployed plan."""
+    s = FleetState.from_fleet_route(fleet())
+    view = s.remaining(0)
+    assert not np.shares_memory(view, s.routes[0])
+    view[1] = 99
+    assert s.routes[0].tolist() == [0, 1, 2, 0]
+
+
+def test_travelled_prefix_is_also_a_copy():
+    from backend.fleet import route_manager as rm
+
+    s = FleetState.from_fleet_route(fleet())
+    s.advance(0)
+    prefix = rm.travelled_route(s.routes[0], int(s.position[0]))
+    prefix[0] = 42
+    assert s.routes[0].tolist() == [0, 1, 2, 0]  # "frozen" means frozen both ways

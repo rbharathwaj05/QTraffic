@@ -1,25 +1,28 @@
 import numpy as np
 import pytest
 
+from backend.config import QTrafficConfig
 from backend.traffic import events as mod
 from backend.traffic.events import EventKind, TrafficEvent
+
+CAP = QTrafficConfig().rho_congestion_max
 
 
 def test_severity_maps_to_the_spec_travel_time_factor():
     """f = 1/(1 - severity) [SPEC 7.2]: severity is the event's rho."""
-    assert mod.severity_to_factor(0.0, EventKind.CONGESTION) == 1.0
-    assert mod.severity_to_factor(0.7, EventKind.CONGESTION) == pytest.approx(1 / 0.3)
-    assert mod.severity_to_factor(0.5, EventKind.ACCIDENT) == pytest.approx(2.0)
+    assert mod.severity_to_factor(0.0, EventKind.CONGESTION, CAP) == 1.0
+    assert mod.severity_to_factor(0.7, EventKind.CONGESTION, CAP) == pytest.approx(1 / 0.3)
+    assert mod.severity_to_factor(0.5, EventKind.ACCIDENT, CAP) == pytest.approx(2.0)
 
 
 def test_closure_and_full_severity_are_infinite():
-    assert mod.severity_to_factor(0.2, EventKind.CLOSURE) == float("inf")
-    assert mod.severity_to_factor(1.0, EventKind.CONGESTION) == float("inf")
+    assert mod.severity_to_factor(0.2, EventKind.CLOSURE, CAP) == float("inf")
+    assert mod.severity_to_factor(1.0, EventKind.CONGESTION, CAP) == float("inf")
 
 
 def test_severity_outside_the_unit_interval_is_rejected():
     with pytest.raises(ValueError):
-        mod.severity_to_factor(1.5, EventKind.CONGESTION)
+        mod.severity_to_factor(1.5, EventKind.CONGESTION, CAP)
 
 
 def test_active_window_is_half_open():

@@ -36,20 +36,30 @@ class TrafficEvent:
         return self.t_start <= t_sim < self.t_end
 
 
-def severity_to_factor(severity: float, kind: EventKind) -> float:
-    """Travel-time multiplier f = 1 / (1 - severity) for congestion/accident/weather,
-    inf for closure (spec: event -> edge factor).
+def severity_to_factor(severity: float, kind: EventKind, rho_congestion_max: float) -> float:
+    """Travel-time multiplier for one event: f = 1 / (1 - min(severity, cap)), inf for a
+    closure (spec: event -> edge factor).
 
-    This is `congestion.rho_to_factor` with severity read as the event's rho: a 0.70
-    congestion event means rho_e = 0.70, i.e. the edge runs at 30 % of normal speed and
-    takes 1/0.30 = 3.33x as long [SPEC 7.2]. severity 1 (or any CLOSURE) is infinite
-    time, the encoding of an unusable edge -- not rho = 1, which the model excludes.
+    Severity IS the event's rho, so it obeys the same ceiling every other rho obeys
+    [SPEC 7.2]: a 0.70 congestion event means rho_e = 0.70, the edge runs at 30 % of
+    normal speed and takes 1/0.30 = 3.33x as long. Anything above
+    `cfg.rho_congestion_max` is clamped to just below it -- previously this function was
+    the way round the cap, since it is the only path that produces live congestion.
+
+    The clamp is `congestion.clip_rho`, called, not re-derived: a second copy of the
+    clamp is exactly how the cap came to be enforced in one place and skipped in another.
+    `rho_congestion_max` has no default for the same reason.
+
+    severity 1 (or any CLOSURE) is infinite time, the encoding of an unusable edge -- not
+    rho = 1, which the model excludes, and not something the cap applies to.
     """
+    from backend.traffic.congestion import clip_rho  # circular at module scope by design
+
     if not 0.0 <= severity <= 1.0:
         raise ValueError(f"severity must be in [0, 1], got {severity}")
     if kind is EventKind.CLOSURE or severity >= 1.0:
         return float("inf")
-    return 1.0 / (1.0 - severity)
+    return 1.0 / (1.0 - float(clip_rho(np.asarray(severity, float), rho_congestion_max)))
 
 
 def generate_events(

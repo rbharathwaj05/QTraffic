@@ -23,16 +23,24 @@ def remaining_route(route: np.ndarray, position: int) -> np.ndarray:
     The current stop is kept because it is the leg's origin -- `remaining_legs` needs a
     start node, and the travel time from where the vehicle stands is exactly the part of
     the plan that a traffic event can still make worse.
+
+    Returns a COPY, not a slice view: `FleetState.remaining` hands this straight to
+    callers, and a view would let an unrelated caller's in-place edit rewrite the live
+    deployed route. Routes are O(N/M_veh) short, so the copy is free; the alias was not.
     """
     p = int(np.clip(position, 0, len(route) - 1))
-    return np.asarray(route)[p:]
+    return np.array(route[p:], copy=True)
 
 
 def travelled_route(route: np.ndarray, position: int) -> np.ndarray:
     """R_travelled: the frozen prefix, current stop included, so that
-    `splice(travelled_route(r, p), optimized)` reconstructs a whole route."""
+    `splice(travelled_route(r, p), optimized)` reconstructs a whole route.
+
+    A COPY for the same reason as `remaining_route`: "frozen" must mean the caller cannot
+    write through it into the live route either.
+    """
     p = int(np.clip(position, 0, len(route) - 1))
-    return np.asarray(route)[: p + 1]
+    return np.array(route[: p + 1], copy=True)
 
 
 def remaining_legs(route: np.ndarray, position: int) -> list[tuple[int, int]]:
