@@ -1,0 +1,7 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+data/city/*.graphml
+frontend/node_modules/
