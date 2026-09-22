@@ -251,3 +251,51 @@ def test_s1_iteration_throughput_baseline():
         f"\nQPSO S1 M=50: {rate:.1f} iterations/s -> >= {int(rate * 5)} iterations in a 5 s budget"
     )
     assert rate >= 5.0  # >= 25 iterations inside the 5 s local budget [SPEC 8]
+
+
+# -- 7.6 regression: an injection must not be cancelled by its own plateau ---------------
+def test_stagnation_is_suppressed_for_a_full_cooldown_after_injection():
+    """The traced Phase 7 bug: the patience window still held the pre-injection plateau,
+    so `stagnated()` re-fired on the next iteration and killed the run one iteration after
+    the injection meant to rescue it."""
+    opt, _, _ = optimizer(M=10)
+    opt.initialize()
+    p = opt.cfg.patience
+    flat = [1.0] * (p + 1)
+    assert opt.stagnated(flat)  # a plateau flags stagnation before any injection
+
+    opt.inject_diversity()
+    assert opt.state.injection_cooldown == p
+    for i in range(p):  # every iteration of the cooldown: suppressed, plateau or not
+        assert not opt.stagnated(flat + [1.0] * i), f"stagnation fired {i} it after injection"
+        opt.state.injection_cooldown = max(0, opt.state.injection_cooldown - 1)
+    assert opt.state.injection_cooldown == 0
+    assert opt.stagnated(flat)  # cooldown spent -> detection live again
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_injection_is_followed_by_meaningful_work_not_an_immediate_exit(seed):
+    """Budget-utilisation guard: after the first injection the run must keep going for at
+    least the cooldown, and must not exit having spent a token fraction of its budget."""
+    cfg = QTrafficConfig()
+    rng = np.random.default_rng(seed)
+    ctx, prob = load_scenario("S1", cfg, rng)
+    opt = mod.QPSO(cfg, mod.Evaluator(ctx, prob, cfg), enc.dim(ctx.n_customers), rng)
+
+    marks, it = [], {"t": 0}
+    base_update, base_inject = opt.update_positions, opt.inject_diversity
+    opt.update_positions = lambda a: (it.__setitem__("t", it["t"] + 1), base_update(a))[1]
+    opt.inject_diversity = lambda: (marks.append(it["t"]), base_inject())[1]
+
+    res = opt.run(time_budget_s=S1_BUDGET)
+    if not marks:
+        pytest.skip("no injection fired inside this budget; nothing to assert about the gap")
+    gap = res.iterations - marks[0]
+    # either the run kept iterating through the whole cooldown, or it stopped because the
+    # budget really was spent -- what must never happen again is exiting ~1 iteration after
+    # the injection with most of the budget still unused.
+    assert gap >= cfg.patience or res.elapsed_s >= 0.8 * S1_BUDGET, (
+        f"exited {gap} iterations after the injection having used "
+        f"{res.elapsed_s:.2f}s of {S1_BUDGET}s"
+    )
+    assert res.stopped_by != "stagnation" or gap >= cfg.patience

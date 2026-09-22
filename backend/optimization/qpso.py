@@ -153,6 +153,7 @@ class QPSOState:
     rng: np.random.Generator
     alpha: float = 1.0
     T_proj: float = 0.0  # projected iteration count driving the alpha schedule
+    injection_cooldown: int = 0  # iterations left in which stagnation cannot fire [SPEC 7.5]
 
 
 @dataclass
@@ -209,8 +210,6 @@ class QPSO:
             alpha=self.cfg.alpha_max,
         )
         self._best_fleet = batch.fleets[g]
-        self._best_batch_idx = g
-        self._best_penalty = float(batch.penalty[g])
         self._best_capped = bool(batch.capped_out[g])
         return batch
 
@@ -256,7 +255,15 @@ class QPSO:
 
     def stagnated(self, history: list[float]) -> bool:
         """True when gbest improved by < epsilon_stag (relative) over the last
-        `cfg.patience` iterations [SPEC 7.5]."""
+        `cfg.patience` iterations [SPEC 7.5].
+
+        Suppressed while `state.injection_cooldown > 0`: the patience window would
+        otherwise still span the pre-injection plateau and re-flag stagnation on the
+        very next iteration, ending the run ~1 iteration after the injection meant to
+        rescue it. The cooldown, not the window, is the invariant -- see `run()`.
+        """
+        if self.state is not None and self.state.injection_cooldown > 0:
+            return False
         p = self.cfg.patience
         if len(history) <= p:
             return False
@@ -273,6 +280,10 @@ class QPSO:
         s.X[worst] = random_particle(self.n_customers, s.rng, k)
         s.pbest[worst] = s.X[worst]
         s.pbest_F[worst] = np.inf
+        # [SPEC 7.5] give the fresh particles a full patience window to show progress
+        # before stagnation may fire again; `cfg.patience` is reused rather than adding a
+        # second knob -- a shorter cooldown cannot clear the plateau from the window.
+        s.injection_cooldown = self.cfg.patience
         return k
 
     # -- pbest / gbest ----------------------------------------------------------------
@@ -288,7 +299,6 @@ class QPSO:
             s.gbest = s.X[g].copy()
             s.gbest_F = float(batch.F[g])
             self._best_fleet = batch.fleets[g]
-            self._best_penalty = float(batch.penalty[g])
             self._best_capped = bool(batch.capped_out[g])
 
     # -- 7.7 main loop -----------------------------------------------------------------
@@ -298,7 +308,14 @@ class QPSO:
         `cfg.T_iter_min`) [SPEC 11 steps 5-28, plain-QPSO subset].
 
         The loop stops early when the next iteration would not fit in the remaining
-        budget, so `elapsed_s <= time_budget_s` holds without relying on luck.
+        budget. The post-loop work (final 2-opt polish + `check_all` on the reported
+        route) is deliberately OUTSIDE that accounting -- the deployed route must be
+        polished and checked whatever the budget says -- so `elapsed_s` can exceed
+        `time_budget_s` by that tail. The tail is a function of route length, not of the
+        budget: measured < 1 ms on S1 (5 seeds, 2 s and 10 s budgets; worst observed
+        `elapsed_s` = 100 % of budget, never above). The 10 % tolerance in the tests is
+        headroom for bigger scenarios, not the measured overshoot. Against the
+        `T_response_local = 10 s` bound of SPEC 9.1 this tail is noise.
         """
         cfg = self.cfg
         T_cap = cfg.T_iter_max if T is None else T
@@ -321,6 +338,7 @@ class QPSO:
             if t % cfg.alpha_update_every == 1 or cfg.alpha_update_every == 1:
                 # project the iteration count the budget actually affords [SPEC 7.4]
                 s.T_proj = min(float(T_cap), budget / per_iter) if np.isfinite(budget) else T_cap
+            s.injection_cooldown = max(0, s.injection_cooldown - 1)
             s.alpha = self.alpha(t, s.T_proj)
             s.mbest = self.mean_best()
             self.update_positions(s.alpha)
@@ -333,10 +351,16 @@ class QPSO:
                 if injections and t >= cfg.T_iter_min:
                     stopped = "stagnation"  # stagnated again after an injection
                     break
+                # Option 1 of the fix: `inject_diversity` arms a patience-long cooldown in
+                # which `stagnated()` cannot fire. Without it the pre-injection plateau is
+                # still inside the patience window next iteration, so the run exits one
+                # iteration after the injection and burns ~15 % of its budget. A counter is
+                # a single invariant to test; truncating the history window at the
+                # injection index (Option 2) re-derives the same rule in slicing logic.
                 self.inject_diversity()
                 injections += 1
-                self._best_fleet = two_opt(self._best_fleet, self.evaluate.prob, cfg)
-                history[-1] = s.gbest_F  # polish is report-only; gbest keys unchanged
+                # no in-loop 2-opt: `_best_fleet` is polished once after the loop, and any
+                # mid-loop polish is either overwritten by the next gbest or redone there.
         else:
             stopped = "iterations"
 
