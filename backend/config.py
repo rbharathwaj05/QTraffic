@@ -96,8 +96,27 @@ class QTrafficConfig:
     patience: int = 15  # window p: iterations without progress before stagnation
 
     # --- response budget, wall-clock seconds (spec: real-time requirements) --------
+    # T_response = T_detection + T_optimization + T_deployment [SPEC 9.1 / v4 56-58].
+    # These are TARGETS to measure against per event, never a claim [SPEC 15].
     T_response_local: float = 10.0  # spec: < 5-10 s; upper bound used, tighten later
     T_response_fleet: float = 30.0  # spec: < 30 s
+    T_detection_target: float = 1.0  # < 1 s: cost-matrix lookup, never a graph search
+    T_deployment_target: float = 1.0  # < 1 s: writing the new plan to the fleet
+    # Fast-fallback ladder (doc2 31): the share of B_available already spent when the
+    # decision is taken picks the level. Level 1 cached route, 2 greedy insertion, 3 swarm.
+    fallback_l1_fraction: float = 0.2  # <= this much budget used -> a cached route will do
+    fallback_l2_fraction: float = 0.9  # <= this -> greedy insertion; above -> keep current
+
+    # --- switching cost (spec 9.3 point 4 / v4 20-21) ------------------------------
+    # S = lambda_1 D_change + lambda_2 N_changes + lambda_3 D_backtrack, and a new plan is
+    # deployed iff I_net = F(R_current) - (F(R_new) + lambda_s S) > epsilon_switch.
+    # The spec gives the FORM, not the numbers: these are tuned so the worked example of
+    # 9.3 (a 30 min route replaced by a 29 min one) is correctly NOT deployed [v4 71].
+    lambda_1: float = 0.10  # per unit of normalised distance changed
+    lambda_2: float = 0.02  # per customer whose (vehicle, predecessor, successor) moved
+    lambda_3: float = 0.10  # per unit of normalised backtracking distance
+    lambda_s: float = 1.0  # overall weight of S inside F_switch
+    epsilon_switch: float = 0.02  # net improvement a reroute must beat to be worth it
 
     # --- capacity (spec: feasibility) ----------------------------------------------
     rho_max: float = 0.95  # max vehicle load ratio

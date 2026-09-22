@@ -177,3 +177,41 @@ class EBQPSO(QPSO):
             "child_acceptance_rate": float(self.children_accepted / bred) if bred else 0.0,
             "child_repair_failure_rate": float(self._child_capped / bred) if bred else 0.0,
         }
+
+
+# -- 10.3 the reactive entrypoint [SPEC v4 50-58] -----------------------------------------
+def reoptimize_local(
+    state,
+    prob,
+    ctx,
+    affected,
+    cfg: QTrafficConfig,
+    rng: np.random.Generator,
+    time_budget_s: float,
+    t_sim: float = 0.0,
+):
+    """Warm-started EB-QPSO over the affected subset only, time-boxed to `B_available`.
+
+    The reactive call the re-plan controller makes [v4 56-58]: it is given a WALL-CLOCK box,
+    never an iteration count, because the response budget is what the deadline is made of.
+
+    Returns `(routes, result, scope)` where `routes` is {global vehicle id: full route,
+    travelled prefix frozen}. Nothing here deploys anything -- the switching gate decides
+    that [SPEC 9.3 point 4].
+
+    Scoping [v4 55]: the swarm's dimension is 2*|C_A| and the decoder is handed |A|, so a
+    four-vehicle incident can only ever produce a four-vehicle plan. Customers outside C_A
+    and vehicles outside A are not in the problem and cannot be touched by construction.
+    """
+    from backend.optimization import local_scope
+    from backend.optimization.encoding import dim
+    from backend.optimization.qpso import Evaluator
+
+    scope = local_scope.build_scope(state, prob, ctx, affected, t_sim=t_sim)
+    if scope.n_customers == 0 or scope.n_vehicles == 0:
+        return {}, None, scope
+
+    opt = EBQPSO(cfg, Evaluator(scope.ctx, scope.prob, cfg), dim(scope.n_customers), rng)
+    seeds = local_scope.warm_start_particles(scope, cfg, rng)  # [v4 53-54]
+    result = opt.run(time_budget_s=time_budget_s, seed_particles=seeds if len(seeds) else None)
+    return scope.to_global(result.fleet, state), result, scope
