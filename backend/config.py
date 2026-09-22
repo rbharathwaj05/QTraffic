@@ -74,6 +74,14 @@ class QTrafficConfig:
     city_cache_dir: Path = Path("data/city")  # GraphML cache location
     depot_latlon: tuple[float, float] | None = None  # None -> graph centroid
 
+    # --- scenario generation (spec v2 doc 6: customer/vehicle placement) ------------
+    shift_end_s: float = 28800.0  # H_v: 8 h shift, sim seconds from scenario start
+    vehicle_capacity: int = 50  # Q_v, demand units
+    demand_range: tuple[int, int] = (1, 10)  # inclusive uniform per customer
+    service_time_range: tuple[int, int] = (120, 600)  # s, inclusive uniform
+    tw_width_range: tuple[int, int] = (1800, 7200)  # s, uniform width of a tight window
+    tw_anytime_fraction: float = 0.20  # share of customers with window [0, shift_end_s)
+
     # --- infra --------------------------------------------------------------------
     redis_url: str = "redis://localhost:6379/0"
     osrm_url: str = "http://localhost:5000"
@@ -111,5 +119,9 @@ class QTrafficConfig:
             raise ValueError("require theta_soft <= theta_hard <= theta_override")
         if not 0 < self.rho_max <= 1:
             raise ValueError("require 0 < rho_max <= 1")
+        if not 0 <= self.tw_anytime_fraction <= 1:
+            raise ValueError("require 0 <= tw_anytime_fraction <= 1")
+        if self.tw_width_range[1] > self.shift_end_s or self.tw_width_range[0] <= 0:
+            raise ValueError("require 0 < tw_width_range <= shift_end_s")
         if self.M <= 0 or self.T_iter_min <= 0 or self.T_iter_min > self.T_iter_max:
             raise ValueError("require M > 0 and 0 < T_iter_min <= T_iter_max")

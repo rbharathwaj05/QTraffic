@@ -4,7 +4,7 @@ services:
     ports: ["6379:6379"]
   osrm:
     image: osrm/osrm-backend
-    command: osrm-routed --algorithm mld /data/city.osrm
+    command: osrm-routed --algorithm mld --max-table-size 10000 /data/city.osrm
     volumes: ["./data/city:/data"]
     ports: ["5000:5000"]
   backend:

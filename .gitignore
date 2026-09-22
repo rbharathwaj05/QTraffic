@@ -6,3 +6,8 @@ build/
 data/city/*.graphml
 frontend/node_modules/
 cache/
+data/city/*.pbf
+data/city/*.osrm*
+data/scenarios/*/*.npz
+data/scenarios/*/*.pkl
+data/scenarios/*/*.npy

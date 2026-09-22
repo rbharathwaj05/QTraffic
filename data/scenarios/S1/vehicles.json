@@ -1,0 +1,47 @@
+[
+ {
+  "vehicle_id": "v000",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v001",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v002",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v003",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ },
+ {
+  "vehicle_id": "v004",
+  "capacity": 50,
+  "current_node": 388126010,
+  "shift_end": 28800.0,
+  "status": "idle",
+  "assigned_customers": [],
+  "remaining_route": []
+ }
+]
